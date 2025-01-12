@@ -1,8 +1,5 @@
 /*globals paper, console, $ */
 /*jslint nomen: true, undef: true, sloppy: true */
-
-const { updateWeightsWithBackend } = require('./api.js');
-
 // NEAT implementation
 
 /*
@@ -24,6 +21,7 @@ for the JavaScript code in this page.
 if (typeof module != "undefined") {
   var R = require('./recurrent.js');
   var kmedoids = require('./kmedoids.js');
+  var updateWeightsWithBackend = require('./api.js');
 }
 
 var N = {};
