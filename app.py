@@ -1,8 +1,12 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import jax.numpy as jnp
 import jax
 
 app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return send_file( "index.html")
 
 @app.route('/update-weights', methods=['POST'])
 def update_weights():

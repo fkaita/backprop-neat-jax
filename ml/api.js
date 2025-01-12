@@ -1,5 +1,5 @@
 export async function updateWeightsWithBackend(weights, inputs, targets) {
-    const response = await fetch('http://127.0.0.1:5000/update-weights', {
+    const response = await fetch('/update-weights', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
