@@ -18,11 +18,11 @@ async function updateWeightsWithBackend(weights, inputs, targets) {
 }
 
 // Export for CommonJS
-if (typeof module != "undefined") {
+if (typeof module !== 'undefined' && module.exports) {
     module.exports = { updateWeightsWithBackend };
 }
 
-// Expose to `window` for browsers
-if (typeof window != "undefined") {
+// Attach to window for browser
+if (typeof window !== 'undefined') {
     window.updateWeightsWithBackend = updateWeightsWithBackend;
 }
