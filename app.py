@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask_cors import CORS
 import jax.numpy as jnp
 import jax
 
 app = Flask(__name__)
+CORS(app)
 
 @app.route("/")
 def index():
@@ -68,4 +70,4 @@ def update_weights(weights, inputs, targets, learning_rate=0.01):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
