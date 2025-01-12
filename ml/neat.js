@@ -2,6 +2,8 @@
 /*jslint nomen: true, undef: true, sloppy: true */
 // NEAT implementation
 
+import { updateWeightsWithBackend } from './api.js';
+
 /*
 
 @licstart  The following is the entire license notice for the
@@ -21,7 +23,6 @@ for the JavaScript code in this page.
 if (typeof module != "undefined") {
   var R = require('./recurrent.js');
   var kmedoids = require('./kmedoids.js');
-  const { updateWeightsWithBackend } = require('./api.js');
 }
 
 var N = {};
