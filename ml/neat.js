@@ -1,9 +1,6 @@
 /*globals paper, console, $ */
 /*jslint nomen: true, undef: true, sloppy: true */
 // NEAT implementation
-
-import { updateWeightsWithBackend } from './api.js';
-
 /*
 
 @licstart  The following is the entire license notice for the
@@ -297,7 +294,7 @@ var N = {};
       //   }
       // }
       try {
-          const updatedWeights = await updateWeightsWithBackend(
+          const updatedWeights = await global.updateWeightsWithBackend(
               this.connections.map(c => c[1]), // Export weights
               [[1.0, 0.5], [0.3, 0.7]],        // Example inputs
               [0.6, 0.8]                      // Example targets
