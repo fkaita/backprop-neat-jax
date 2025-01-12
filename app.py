@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 import jax.numpy as jnp
 import jax
 
@@ -7,6 +7,21 @@ app = Flask(__name__)
 @app.route("/")
 def index():
     return send_file( "index.html")
+
+# Serve CSS files
+@app.route('/css/<path:filename>')
+def css(filename):
+    return send_from_directory('css', filename)
+
+# Serve JS or other files from the lib directory
+@app.route('/lib/<path:filename>')
+def lib(filename):
+    return send_from_directory('lib', filename)
+
+# Serve JS files or other assets from the ml directory
+@app.route('/ml/<path:filename>')
+def ml(filename):
+    return send_from_directory('ml', filename)
 
 @app.route('/update-weights', methods=['POST'])
 def update_weights():
