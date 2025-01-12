@@ -4,41 +4,21 @@ import jax.numpy as jnp
 import jax
 
 app = Flask(__name__)
-CORS(app)
 
-@app.route("/")
+
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Serve the main index.html
+@app.route('/')
 def index():
-    return send_file( "index.html")
+    return send_from_directory(app.static_folder, 'index.html')
 
-# Serve CSS files
-@app.route('/css/<path:filename>')
-def css(filename):
-    return send_from_directory('css', filename)
 
-# Serve JS or other files from the lib directory
-@app.route('/lib/<path:filename>')
-def lib(filename):
-    return send_from_directory('lib', filename)
+# Catch-all route to serve static files (e.g., CSS, JS, assets)
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory(app.static_folder, path)
 
-# Serve JS files or other assets from the ml directory
-@app.route('/ml/<path:filename>')
-def ml(filename):
-    return send_from_directory('ml', filename)
-
-@app.route('/update-weights', methods=['POST'])
-def update_weights():
-    data = request.json
-    weights = data['weights']
-    inputs = jnp.array(data['inputs'])
-    targets = jnp.array(data['targets'])
-
-    updated_weights = update_weights(weights, inputs, targets)
-
-    return jsonify({'updated_weights': updated_weights})
-
-@app.route('/<path:filename>')
-def serve_file(filename):
-    return send_from_directory('.', filename)
 
 def update_weights(weights, inputs, targets, learning_rate=0.01):
     """
@@ -70,4 +50,4 @@ def update_weights(weights, inputs, targets, learning_rate=0.01):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5001)

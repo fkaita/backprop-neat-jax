@@ -1,6 +1,7 @@
+const BASE_URL = '';
 
 async function updateWeightsWithBackend(weights, inputs, targets) {
-    const response = await fetch('/update-weights', {
+    const response = await fetch(`${BASE_URL}/update-weights`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
