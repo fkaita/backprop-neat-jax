@@ -34,6 +34,9 @@ def update_weights():
 
     return jsonify({'updated_weights': updated_weights})
 
+@app.route('/<path:filename>')
+def serve_file(filename):
+    return send_from_directory('.', filename)
 
 def update_weights(weights, inputs, targets, learning_rate=0.01):
     """
