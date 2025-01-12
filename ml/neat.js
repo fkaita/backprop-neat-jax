@@ -308,7 +308,7 @@ var N = {};
       //   }
       // }
       try {
-          const updatedWeights = await global.updateWeightsWithBackend(
+          const updatedWeights = await updateWeightsWithBackend(
               this.connections.map(c => c[1]), // Export weights
               [[1.0, 0.5], [0.3, 0.7]],        // Example inputs
               [0.6, 0.8]                      // Example targets
