@@ -1,6 +1,8 @@
 /*globals paper, console, $ */
 /*jslint nomen: true, undef: true, sloppy: true */
 
+const { updateWeightsWithBackend } = require('./api.js');
+
 // NEAT implementation
 
 /*
@@ -22,6 +24,7 @@ for the JavaScript code in this page.
 if (typeof module != "undefined") {
   var R = require('./recurrent.js');
   var kmedoids = require('./kmedoids.js');
+  var updateWeightsWithBackend = require("./api.js")
 }
 
 var N = {};
@@ -283,17 +286,31 @@ var N = {};
       if (sourceGenome.fitness) this.fitness = sourceGenome.fitness;
       if (sourceGenome.cluster) this.cluster = sourceGenome.cluster;
     },
-    mutateWeights: function(mutationRate_, mutationSize_) {
+    mutateWeights: async function(mutationRate_, mutationSize_) {
       // mutates each weight of current genome with a probability of mutationRate
       // by adding a gaussian noise of zero mean and mutationSize stdev to it
       var mRate = mutationRate_ || mutationRate;
       var mSize = mutationSize_ || mutationSize;
 
-      var i, n;
-      for (i=0,n=this.connections.length;i<n;i++) {
-        if (Math.random() < mRate) {
-          this.connections[i][IDX_WEIGHT] += R.randn(0, mSize);
-        }
+      // var i, n;
+      // for (i=0,n=this.connections.length;i<n;i++) {
+      //   if (Math.random() < mRate) {
+      //     this.connections[i][IDX_WEIGHT] += R.randn(0, mSize);
+      //   }
+      // }
+      try {
+          const updatedWeights = await updateWeightsWithBackend(
+              this.connections.map(c => c[1]), // Export weights
+              [[1.0, 0.5], [0.3, 0.7]],        // Example inputs
+              [0.6, 0.8]                      // Example targets
+          );
+
+          // Update genome's weights with the response
+          this.connections.forEach((c, i) => {
+              c[1] = updatedWeights[i]; // Update the weight in the connection
+          });
+      } catch (error) {
+          console.error('Error during weight optimization:', error);
       }
     },
     areWeightsNaN: function() {
@@ -327,6 +344,23 @@ var N = {};
           origWeight = Math.max(-maxWeight,origWeight);
 
           this.connections[i][IDX_WEIGHT] = origWeight;
+      }
+    },
+    exportWeights: function() {
+      const weights = [];
+      const nConnections = this.model.connections.length;
+      for (let i = 0; i < nConnections; i++) {
+        weights.push(this.model.connections[i].w[0]);
+      }
+      return weights;
+    },
+    importWeights : function(weightArray) {
+      const nConnections = this.model.connections.length;
+      if (weightArray.length !== nConnections) {
+        throw new Error("Weight array length does not match the number of connections!");
+      }
+      for (let i = 0; i < nConnections; i++) {
+        this.model.connections[i].w[0] = weightArray[i];
       }
     },
     getAllConnections: function() {
