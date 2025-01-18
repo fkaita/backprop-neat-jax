@@ -27,17 +27,17 @@ var N = {};
 (function(global) {
   "use strict";
 
-  var updateWeightsWithBackend;
+  var updateGraphWithBackend;
 
   if (typeof module !== 'undefined' && module.exports) {
       // Node.js/CommonJS
       const api = require('./api.js');
-      updateWeightsWithBackend = api.updateWeightsWithBackend;
+      updateGraphWithBackend = api.updateGraphWithBackend;
   } else if (typeof window !== 'undefined') {
       // Browser
-      updateWeightsWithBackend = window.updateWeightsWithBackend;
+      updateGraphWithBackend = window.updateGraphWithBackend;
   } else {
-      throw new Error('Environment not supported: updateWeightsWithBackend not found');
+      throw new Error('Environment not supported: updateGraphWithBackend not found');
   }
 
 
@@ -301,25 +301,11 @@ var N = {};
       var mRate = mutationRate_ || mutationRate;
       var mSize = mutationSize_ || mutationSize;
 
-      // var i, n;
-      // for (i=0,n=this.connections.length;i<n;i++) {
-      //   if (Math.random() < mRate) {
-      //     this.connections[i][IDX_WEIGHT] += R.randn(0, mSize);
-      //   }
-      // }
-      try {
-          const updatedWeights = await updateWeightsWithBackend(
-              this.connections.map(c => c[1]), // Export weights
-              [[1.0, 0.5], [0.3, 0.7]],        // Example inputs
-              [0.6, 0.8]                      // Example targets
-          );
-
-          // Update genome's weights with the response
-          this.connections.forEach((c, i) => {
-              c[1] = updatedWeights[i]; // Update the weight in the connection
-          });
-      } catch (error) {
-          console.error('Error during weight optimization:', error);
+      var i, n;
+      for (i=0,n=this.connections.length;i<n;i++) {
+        if (Math.random() < mRate) {
+          this.connections[i][IDX_WEIGHT] += R.randn(0, mSize);
+        }
       }
     },
     areWeightsNaN: function() {
@@ -685,7 +671,6 @@ var N = {};
       }
     },
     toJSON: function(description) {
-
       var data = {
         nodes: copyArray(nodes),
         connections: copyConnections(connections),

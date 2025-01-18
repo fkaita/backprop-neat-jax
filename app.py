@@ -1,10 +1,12 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import jax.numpy as jnp
-import jax
+from neat import NEATModel
 
 app = Flask(__name__)
 
+# Initialize global model instance
+neat_model = None
 
 CORS(app, resources={r"/*": {"origins": "*"}})
 
@@ -13,40 +15,61 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 def index():
     return send_from_directory(app.static_folder, 'index.html')
 
-
 # Catch-all route to serve static files (e.g., CSS, JS, assets)
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
 
+@app.route('/initialize', methods=['POST'])
+def initialize():
+    """Initialize NEAT model with a genome from the request"""
+    global neat_model
+    data = request.json  # Get JSON payload
+    genome_json = data.get("genome")
 
-def update_weights(weights, inputs, targets, learning_rate=0.01):
-    """
-    Simulates weight optimization using JAX.
-    Args:
-        weights (list of floats): Current weights sent from the frontend.
-        inputs (jax.numpy.array): Input data for training.
-        targets (jax.numpy.array): Target data for training.
-        learning_rate (float): Optimization step size.
+    if not genome_json:
+        return jsonify({"error": "Missing genome data"}), 400
 
-    Returns:
-        list of floats: Updated weights.
-    """
-    # Convert weights to JAX array
-    weights_jax = jnp.array(weights)
+    neat_model = NEATModel(genome_json)  # Initialize the model
+    return jsonify({"message": "NEAT model initialized successfully"})
 
-    # Example loss function: Mean Squared Error
-    def loss_fn(w):
-        predictions = jnp.dot(inputs, w)  # Example linear prediction
-        return jnp.mean((predictions - targets) ** 2)
 
-    # Compute gradients
-    loss_grad_fn = jax.value_and_grad(loss_fn)
-    loss, gradients = loss_grad_fn(weights_jax)
+@app.route('/forward', methods=['POST'])
+def forward():
+    """Perform forward pass and return predictions"""
+    global neat_model
+    if neat_model is None:
+        return jsonify({"error": "Model not initialized"}), 400
 
-    # Update weights
-    updated_weights = weights_jax - learning_rate * gradients
-    return updated_weights.tolist()
+    data = request.json
+    inputs = jnp.array(data.get("inputs"))
+
+    try:
+        outputs = neat_model.forward(inputs)
+        return jsonify({"outputs": outputs.tolist()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/backward', methods=['POST'])
+def backward():
+    """Perform backward pass (training step) and return updated genome"""
+    global neat_model
+    if neat_model is None:
+        return jsonify({"error": "Model not initialized"}), 400
+
+    data = request.json
+    inputs = jnp.array(data.get("inputs"))
+    targets = jnp.array(data.get("targets"))
+
+    try:
+        updated_genome, avg_error = neat_model.backward(inputs, targets)
+        return jsonify({
+            "updated_genome": updated_genome,
+            "avg_error": avg_error
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':

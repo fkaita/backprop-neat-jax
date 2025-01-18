@@ -423,7 +423,7 @@ function drawDataPoint(p, prediction_) {
 
 }
 
-var fitnessFunc = function(genome, _backpropMode, _nCycles) {
+var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
   // this function backprops the genome over nCycles on the dataset.
   // returns final error (fitness);
   "use strict";
@@ -473,21 +473,40 @@ var fitnessFunc = function(genome, _backpropMode, _nCycles) {
       genome.setupModel(nBatch);
       genome.setInput(dataBatch);
       G = new R.Graph();
-      genome.forward(G);
-      output = genome.getOutput();
-      output[0] = G.sigmoid(output[0]);
 
-      for (i=0;i<nBatch;i++) {
-        y = output[0].w[i]; // prediction (not to be confused w/ coordinate)
-        t = labelBatch.get(i, 0); // ground truth label
-        e = -(t*Math.log(y)+(1-t)*Math.log(1-y)); // logistic regression
-        output[0].dw[i] = (y-t) / nBatch;
-        avgError += e/nBatch;
+      // Replace this part with JAX backend FROM HERE
+      // genome.forward(G);
+      // output = genome.getOutput();
+      // output[0] = G.sigmoid(output[0]);
+
+      // for (i=0;i<nBatch;i++) {
+      //   y = output[0].w[i]; // prediction (not to be confused w/ coordinate)
+      //   t = labelBatch.get(i, 0); // ground truth label
+      //   e = -(t*Math.log(y)+(1-t)*Math.log(1-y)); // logistic regression
+      //   output[0].dw[i] = (y-t) / nBatch;
+      //   avgError += e/nBatch;
+      // }
+
+      // G.backward();
+      // solver.step(genome.model.connections, learnRate, 0.001, 5.0);
+      // genome.updateModelWeights();
+      // REPLACE UNTIL HERE
+
+      // Replace above with JAX backend API (Forward and backward)
+      try {
+        const updatedGraph = await updateGraphWithBackend(genome.toJSON());
+          
+          // Ensure updatedGraph is valid
+          if (!updatedGraph) {
+              throw new Error("Received invalid response from backend.");
+          }
+
+          // Update genome with new data
+          genome.fromJSON(JSON.stringify(updatedGraph));
+      } catch (error) {
+          console.error('Error during weight optimization:', error);
       }
 
-      G.backward();
-      solver.step(genome.model.connections, learnRate, 0.001, 5.0);
-      genome.updateModelWeights();
 
       if (j > 0 && j % 20 === 0) {
         finalError = findTotalError();
