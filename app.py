@@ -3,6 +3,7 @@ from flask_cors import CORS
 import jax.numpy as jnp
 from neat import NEATModel
 import json
+import traceback
 
 app = Flask(__name__)
 
@@ -68,23 +69,41 @@ def backward():
     global neat_model
     if neat_model is None:
         return jsonify({"error": "Model not initialized"}), 400
-
-    data = request.json
-    # print("Received JSON:", data)
-    inputs_w = list(data["inputs"]["w"].values())
-    targets_w = list(data["targets"]["w"].values())
-    inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
-    targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
-
+    
     try:
-        updated_genome, avg_error = neat_model.backward(inputs, targets)
+        data = request.json
+        # print("Received JSON:", data)
+        inputs_w = list(data["inputs"]["w"].values())
+        targets_w = list(data["targets"]["w"].values())
+        inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
+        targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
+        nCycles = data.get("nCycles", 1)  # Get training cycles (default = 1)
+
+         # Perform multiple training iterations
+        for _ in range(nCycles):
+            updated_genome, avg_error, predictions = neat_model.backward(inputs, targets)
+
+        updated_genome, avg_error, predictions = neat_model.backward(inputs, targets)
         return jsonify({
             "updated_genome": updated_genome,
-            "avg_error": avg_error
+            "avg_error": avg_error,
+            "output": {
+                "n": predictions["n"],  # Number of samples
+                "d": predictions["d"],  # Number of output dimensions
+                "w": predictions["w"],  # Predictions as Float32Array
+                "dw": predictions["dw"]  # Gradients as Float32Array
+            }
         })
     except Exception as e:
+        print("Exception Traceback:", traceback.format_exc())  # Log full traceback
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
+
+
+# TODO 
+# Circle when processing
+# Fintess is not correct number
+# Back prop doesnt change result

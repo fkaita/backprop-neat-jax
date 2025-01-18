@@ -82,8 +82,12 @@ class NEATModel:
 
     def backward(self, inputs, targets):
         """ Compute gradients and update weights (without `jit` on self) """
-        loss_grad_fn = jit(grad(self.loss))  # `jit` applied to grad function only
-        grads = loss_grad_fn(self.W, inputs, targets)  # Compute gradients
+        # loss_grad_fn = jit(grad(self.loss))  # `jit` applied to grad function only
+        # grads = loss_grad_fn(self.W, inputs, targets)  # Compute gradients
+        preds = self.forward(inputs)  # Compute forward pass explicitly
+        loss_grad_fn = jit(grad(lambda W: self.loss(W, inputs, targets)))  # Use precomputed preds
+        grads = loss_grad_fn(self.W)  # Compute gradients
+
         self.opt_state = self.opt_update(0, grads, self.opt_state)  # Update optimizer state
         self.W = self.get_params(self.opt_state)  # Apply updated weights
 
@@ -97,7 +101,17 @@ class NEATModel:
         # Compute average loss for batch
         avg_error = float(self.loss(self.W, inputs, targets))
 
-        return self.genome_json, avg_error  # Return updated weights
+        # Format predictions to match JS structure (arrays instead of dicts)
+        pred_list = preds.flatten().tolist()  # Convert to a list
+        grad_list = grads.flatten().tolist()  # Convert gradients to a list
+
+        formatted_preds = {
+            "n": preds.shape[0],  # Number of samples (batch size)
+            "d": preds.shape[1],  # Number of outputs per sample
+            "w": pred_list,  # Predictions as a flat list
+            "dw": grad_list  # Gradients as a flat list (similar to how `dw` works in JS)
+        }
+        return self.genome_json, avg_error, formatted_preds  # Return updated weights
 
 
 if __name__ == "__main__":

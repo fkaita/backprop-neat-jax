@@ -471,7 +471,7 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
         console.error('Error during weight optimization:', error);
     }
 
-    for (j=0;j<nCycles;j++) {
+    for (j=0;j<1;j++) {
       // try to find error
       avgError = 0.0;
       // make minibatch
@@ -482,7 +482,8 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
 
       // Replace this part with JAX backend FROM HERE
       // genome.forward(G);
-      // output = genome.getOutput();
+      output = genome.getOutput();
+      // console.log(output)
       // output[0] = G.sigmoid(output[0]);
 
       // for (i=0;i<nBatch;i++) {
@@ -500,7 +501,7 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
 
       // Replace above with JAX backend API (Forward and backward)
       try {
-        const response = await Api.backwardPass(dataBatch, labelBatch);
+        const response = await Api.backwardPass(dataBatch, labelBatch, nCycles);
           
           // Ensure updatedGraph is valid
           if (!response) {
@@ -508,14 +509,16 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
           }
 
           // Update genome with new data
-          genome.fromJSON(response.updated_genome);
-          avgError = response.avg_error;
+          genome.fromJSON(response.updatedGenome);
+          avgError = response.avgError;
+          output[0] = response.output;
       } catch (error) {
           console.error('Error during weight optimization:', error);
       }
 
       if (j > 0 && j % 20 === 0) {
         finalError = findTotalError();
+        console.log(avgError, finalError)
         if (finalError > initError) {
           // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
           // console.log('leaving prematurely at j = '+j);

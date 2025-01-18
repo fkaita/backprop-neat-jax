@@ -65,7 +65,7 @@
      * @param {Array} targets - The target batch
      * @returns {Promise<Object>} Updated genome and average error
      */
-    async function backwardPass(inputs, targets) {
+    async function backwardPass(inputs, targets, nCycles=1) {
         const response = await fetch(`${BASE_URL}/backward`, {
             method: 'POST',
             headers: {
@@ -74,6 +74,7 @@
             body: JSON.stringify({
                 inputs,
                 targets,
+                nCycles
             }),
         });
 
@@ -81,7 +82,17 @@
             throw new Error('Backward pass (training) failed');
         }
 
-        return await response.json();
+        const data = await response.json();
+        return {
+            updatedGenome: data.updated_genome,
+            avgError: data.avg_error,
+            output: {
+                n: data.output.n,  // Batch size
+                d: data.output.d,  // Output dimension
+                w: Array.from(data.output.w),  // Convert Float32Array to standard JS array
+                dw: Array.from(data.output.dw) // Convert Float32Array to standard JS array
+            }
+        };
     }
     // Expose API functions globally for browser and Node.js
     const Api = {
