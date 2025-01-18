@@ -674,7 +674,7 @@ var N = {};
 
     },
     fromJSON: function(data_string) {
-      var data = JSON.parse(data_string);
+      var data = typeof data_string === "string" ? JSON.parse(data_string) : data_string;
       nodes = copyArray(data.nodes);
       connections = copyConnections(data.connections);
       nInput = data.nInput;

@@ -20,6 +20,8 @@
      * @returns {Promise<Object>} Response message
      */
     async function initializeModel(genomeJson, learningRate = 0.01) {
+        // console.log("Sending JSON:", JSON.stringify({ genome: genomeJson, learning_rate: learningRate }));
+
         const response = await fetch(`${BASE_URL}/initialize`, {
             method: 'POST',
             headers: {
@@ -61,7 +63,6 @@
      * Perform backward pass (training) with inputs and targets
      * @param {Array} inputs - The input batch
      * @param {Array} targets - The target batch
-     * @param {number} learningRate - Learning rate for training
      * @returns {Promise<Object>} Updated genome and average error
      */
     async function backwardPass(inputs, targets) {
@@ -73,7 +74,6 @@
             body: JSON.stringify({
                 inputs,
                 targets,
-                learning_rate: learningRate,
             }),
         });
 

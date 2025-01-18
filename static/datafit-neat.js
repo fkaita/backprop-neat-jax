@@ -508,12 +508,11 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
           }
 
           // Update genome with new data
-          genome.fromJSON(response.get("updated_genome"));
-          avgError = response.get("avg_error");
+          genome.fromJSON(response.updated_genome);
+          avgError = response.avg_error;
       } catch (error) {
           console.error('Error during weight optimization:', error);
       }
-
 
       if (j > 0 && j % 20 === 0) {
         finalError = findTotalError();

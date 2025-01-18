@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 import jax.numpy as jnp
 from neat import NEATModel
+import json
 
 app = Flask(__name__)
 
@@ -25,12 +26,21 @@ def initialize():
     """Initialize NEAT model with a genome from the request"""
     global neat_model
     data = request.json  # Get JSON payload
+    # print("Received JSON:", data)
+
     genome_json = data.get("genome")
     learning_rate = data.get("learning_rate", 0.01)
 
-    if not genome_json:
-        return jsonify({"error": "Missing genome data"}), 400
+    if isinstance(genome_json, str):
+        try:
+            genome_json = json.loads(genome_json)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid genome format, could not parse JSON"}), 400
 
+    if not isinstance(genome_json, dict):
+        return jsonify({"error": "Invalid genome format, expected a JSON object"}), 400
+
+    
     neat_model = NEATModel(genome_json, learning_rate=learning_rate)  # Initialize the model
     return jsonify({"message": "NEAT model initialized successfully"})
 
@@ -54,14 +64,17 @@ def forward():
 
 @app.route('/backward', methods=['POST'])
 def backward():
-    """Perform backward pass (training step) and return updated genome"""
+    # """Perform backward pass (training step) and return updated genome"""
     global neat_model
     if neat_model is None:
         return jsonify({"error": "Model not initialized"}), 400
 
     data = request.json
-    inputs = jnp.array(data.get("inputs"))
-    targets = jnp.array(data.get("targets"))
+    # print("Received JSON:", data)
+    inputs_w = list(data["inputs"]["w"].values())
+    targets_w = list(data["targets"]["w"].values())
+    inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
+    targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
 
     try:
         updated_genome, avg_error = neat_model.backward(inputs, targets)
