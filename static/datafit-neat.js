@@ -465,6 +465,12 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
     var genomeBackup = genome.copy(); // make a copy, in case backprop messes shit up.
     var origGenomeBackup = genome.copy(); // make a copy, in case backprop REALLY messes shit up.
 
+    try {
+      await Api.initializeModel(genome.toJSON(), learnRate);
+    } catch (error) {
+        console.error('Error during weight optimization:', error);
+    }
+
     for (j=0;j<nCycles;j++) {
       // try to find error
       avgError = 0.0;
@@ -494,15 +500,16 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
 
       // Replace above with JAX backend API (Forward and backward)
       try {
-        const updatedGraph = await updateGraphWithBackend(genome.toJSON());
+        const response = await Api.backwardPass(dataBatch, labelBatch);
           
           // Ensure updatedGraph is valid
-          if (!updatedGraph) {
+          if (!response) {
               throw new Error("Received invalid response from backend.");
           }
 
           // Update genome with new data
-          genome.fromJSON(JSON.stringify(updatedGraph));
+          genome.fromJSON(response.get("updated_genome"));
+          avgError = response.get("avg_error");
       } catch (error) {
           console.error('Error during weight optimization:', error);
       }

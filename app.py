@@ -26,11 +26,12 @@ def initialize():
     global neat_model
     data = request.json  # Get JSON payload
     genome_json = data.get("genome")
+    learning_rate = data.get("learning_rate", 0.01)
 
     if not genome_json:
         return jsonify({"error": "Missing genome data"}), 400
 
-    neat_model = NEATModel(genome_json)  # Initialize the model
+    neat_model = NEATModel(genome_json, learning_rate=learning_rate)  # Initialize the model
     return jsonify({"message": "NEAT model initialized successfully"})
 
 

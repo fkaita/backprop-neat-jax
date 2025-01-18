@@ -27,20 +27,6 @@ var N = {};
 (function(global) {
   "use strict";
 
-  var updateGraphWithBackend;
-
-  if (typeof module !== 'undefined' && module.exports) {
-      // Node.js/CommonJS
-      const api = require('./api.js');
-      updateGraphWithBackend = api.updateGraphWithBackend;
-  } else if (typeof window !== 'undefined') {
-      // Browser
-      updateGraphWithBackend = window.updateGraphWithBackend;
-  } else {
-      throw new Error('Environment not supported: updateGraphWithBackend not found');
-  }
-
-
   // constants
   var NODE_INPUT = 0;
   var NODE_OUTPUT = 1;

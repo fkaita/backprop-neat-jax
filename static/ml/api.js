@@ -1,6 +1,3 @@
-const BASE_URL = 'http://127.0.0.1:5001';
-
-
 
 // Exporting data format
 // var data = {
@@ -14,29 +11,92 @@ const BASE_URL = 'http://127.0.0.1:5001';
 //     description: description -> no need to use (return same value)
 //   };
 
+(function (global) {
+    "use strict";
+    const BASE_URL = 'http://127.0.0.1:5001';
+    /**
+     * Initialize NEAT Model with genome data
+     * @param {Object} genomeJson - The genome JSON data
+     * @returns {Promise<Object>} Response message
+     */
+    async function initializeModel(genomeJson, learningRate = 0.01) {
+        const response = await fetch(`${BASE_URL}/initialize`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ genome: genomeJson, learning_rate: learningRate }),
+        });
 
-async function updateGraphWithBackend(neatGraphJson) {
-    const response = await fetch(`${BASE_URL}/update-weights`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: neatGraphJson
-    });
+        if (!response.ok) {
+            throw new Error('Failed to initialize model');
+        }
 
-    if (!response.ok) {
-        throw new Error('Failed to update weights');
+        return await response.json();
     }
 
-    return await response.json();
-}
+    /**
+     * Perform forward pass with input data
+     * @param {Array} inputs - The input data
+     * @returns {Promise<Array>} Output values from the model
+     */
+    async function forwardPass(inputs) {
+        const response = await fetch(`${BASE_URL}/forward`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ inputs }),
+        });
 
-// Export for CommonJS
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { updateGraphWithBackend };
-}
+        if (!response.ok) {
+            throw new Error('Forward pass failed');
+        }
 
-// Attach to window for browser
-if (typeof window !== 'undefined') {
-    window.updateGraphWithBackend = updateGraphWithBackend;
-}
+        const data = await response.json();
+        return data.outputs;
+    }
+
+    /**
+     * Perform backward pass (training) with inputs and targets
+     * @param {Array} inputs - The input batch
+     * @param {Array} targets - The target batch
+     * @param {number} learningRate - Learning rate for training
+     * @returns {Promise<Object>} Updated genome and average error
+     */
+    async function backwardPass(inputs, targets) {
+        const response = await fetch(`${BASE_URL}/backward`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                inputs,
+                targets,
+                learning_rate: learningRate,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Backward pass (training) failed');
+        }
+
+        return await response.json();
+    }
+    // Expose API functions globally for browser and Node.js
+    const Api = {
+        initializeModel,
+        forwardPass,
+        backwardPass
+    };
+
+    // Attach to window for browser
+    if (typeof window !== 'undefined') {
+        window.Api = Api;
+    }
+
+    // Export for Node.js
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = Api;
+    }
+})(this);
