@@ -94,11 +94,46 @@
             }
         };
     }
+
+    /**
+     * Perform batch backward pass (training) for multiple genomes using shared inputs/targets.
+     * @param {Array} geneList - List of genome objects
+     * @param {Object} inputs - Shared input batch
+     * @param {Object} targets - Shared target batch
+     * @param {number} nCycles - Number of training cycles (default = 1)
+     * @returns {Promise<Array>} List of updated genomes and errors
+     */
+    async function batchBackwardPass(geneList, inputs, targets, nCycles = 1) {
+        // console.log(geneList)
+        // console.log(inputs)
+        // console.log(targets)
+        const response = await fetch(`${BASE_URL}/batch_backward`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                genes: geneList,  // Send all genomes
+                inputs,  // Send shared inputs
+                targets,  // Send shared targets
+                nCycles,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error("Batch backward pass (training) failed");
+        }
+
+        const results = await response.json();
+        return results;  // Return the entire batch results
+    }
+
     // Expose API functions globally for browser and Node.js
     const Api = {
         initializeModel,
         forwardPass,
-        backwardPass
+        backwardPass,
+        batchBackwardPass
     };
 
     // Attach to window for browser

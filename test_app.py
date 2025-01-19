@@ -28,6 +28,39 @@ TARGET_DATA = {
     "targets": [[1.0], [0.0], [1.0]],  # True label
 }
 
+BATCH_GENES = [
+    {
+        "nodes": [3, 4, 5, 6],
+        "connections": [[0, 1], [1, 2], [2, 3]],
+        "nInput": 2,
+        "nOutput": 1,
+        "genome": [
+            {"0": 0, "1": 0.5, "2": 1},
+            {"0": 1, "1": -0.8, "2": 1},
+            {"0": 2, "1": 1.2, "2": 1},
+        ],
+    },
+    {
+        "nodes": [3, 4, 5, 6],
+        "connections": [[0, 1], [1, 2], [2, 3]],
+        "nInput": 2,
+        "nOutput": 1,
+        "genome": [
+            {"0": 0, "1": 0.3, "2": 1},
+            {"0": 1, "1": -0.5, "2": 1},
+            {"0": 2, "1": 0.9, "2": 1},
+        ],
+    },
+]
+
+BATCH_BACKWARD_DATA = {
+    "genes": BATCH_GENES,  # List of genomes to process
+    "inputs": TARGET_DATA["inputs"],  # Shared inputs for all genes
+    "targets": TARGET_DATA["targets"],  # Shared targets for all genes
+    "nCycles": 2,  # Number of training cycles
+    "batch_size": 2,  # Mini-batch size
+}
+
 @pytest.fixture
 def client():
     """Set up Flask test client"""
@@ -60,6 +93,24 @@ def test_backward(client):
     assert "updated_genome" in response_data
     assert "avg_error" in response_data
     assert isinstance(response_data["avg_error"], float)
+
+def test_batch_backward(client):
+    """Test batch backward pass (training) for multiple genomes with shared inputs/targets"""
+    client.post("/initialize", json={"genome": GENOME_JSON})  # Ensure model is initialized
+    response = client.post("/batch_backward", json=BATCH_BACKWARD_DATA)
+
+    assert response.status_code == 200
+    response_data = response.json
+
+    # Ensure batch response is a list
+    assert isinstance(response_data, list)
+    assert len(response_data) == len(BATCH_GENES)  # Response should match number of genomes processed
+
+    for result in response_data:
+        assert "updated_genome" in result
+        assert "avg_error" in result
+        assert isinstance(result["avg_error"], float)  # Ensure loss is a valid float
+
 
 if __name__ == "__main__":
     pytest.main(["-v", "test_app.py"])

@@ -57,7 +57,7 @@ var Particle = function(x, y, l) {
 };
 
 // data settings
-var initNSize = 200;
+var initNSize = 500;
 var nSize = initNSize; // training size
 var particleList = [];
 var predictionList;
@@ -69,7 +69,7 @@ var showTrainData = true;
 var dataSetChoice = 0;
 
 // test set
-var initNTestSize = 400;
+var initNTestSize = 100;
 var nTestSize = initNTestSize; // test size
 var particleTestList = [];
 var predictionTestList;
@@ -79,7 +79,7 @@ var testLabel; // holds particleList's y training data
 var showTestData = true;
 
 // minibatch
-var nBatch = 10; // minibatch size
+var nBatch = 100; // minibatch size
 var dataBatch = new R.Mat(nBatch, 2);
 var labelBatch = new R.Mat(nBatch, 1);
 
@@ -286,7 +286,7 @@ function alphaColor(c, a) {
 
 // NEAT related code
 
-function initModel() {
+async function initModel() {
 
   var i, j;
 
@@ -306,7 +306,8 @@ function initModel() {
   compressor = new N.NEATCompressor();
   */
 
-  trainer.applyFitnessFunc(fitnessFunc);
+  // trainer.applyFitnessFunc(fitnessFunc);
+  await trainer.applyFitnessFunc(fitnessFunc, data, label, 1);
 
   genome = trainer.getBestGenome();
 
@@ -377,7 +378,7 @@ function setCluster(cluster) {
 // p5 related code
 
 var myCanvas;
-function setup() {
+async function setup() {
   myCanvas = createCanvas(min($(window).width()*0.8, 640), min($(window).height()*0.6, 480));
 
   myCanvas.parent('p5Container');
@@ -390,8 +391,8 @@ function setup() {
 
   // at the beginning, evolve a few times
   for (var i=0;i<1;i++) {
-    trainer.evolve();
-    backprop(1);
+    await trainer.evolve();
+    await backprop(1);
   }
 
   renderGraph();
@@ -466,16 +467,20 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
     var origGenomeBackup = genome.copy(); // make a copy, in case backprop REALLY messes shit up.
 
     try {
+      console.log("Initializing model...");
       await Api.initializeModel(genome.toJSON(), learnRate);
+      console.log("Model initialized.");
     } catch (error) {
         console.error('Error during weight optimization:', error);
     }
 
+    console.log("Entering backprop loop.");
     for (j=0;j<1;j++) {
       // try to find error
       avgError = 0.0;
       // make minibatch
       makeMiniBatch();
+      console.log("Mini batch created.");
       genome.setupModel(nBatch);
       genome.setInput(dataBatch);
       G = new R.Graph();
@@ -501,7 +506,9 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
 
       // Replace above with JAX backend API (Forward and backward)
       try {
-        const response = await Api.backwardPass(dataBatch, labelBatch, nCycles);
+        console.log("Preparing to call backwardPass...");
+        const response = await Api.backwardPass(dataBatch, labelBatch, _nCycles);
+        console.log("Backward pass completed.");
           
           // Ensure updatedGraph is valid
           if (!response) {
@@ -509,26 +516,43 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
           }
 
           // Update genome with new data
-          genome.fromJSON(response.updatedGenome);
+          // genome.fromJSON(response.updatedGenome);
+          // const weights = response.updatedGenome.genome.map(item => item["1"]);
+          genome.importWeightsNew(response.updatedGenome.genome);
+          genome.fitness = response.avgError;
+
           avgError = response.avgError;
+          console.log(avgError)
           output[0] = response.output;
       } catch (error) {
           console.error('Error during weight optimization:', error);
       }
-
-      if (j > 0 && j % 20 === 0) {
-        finalError = findTotalError();
-        console.log(avgError, finalError)
-        if (finalError > initError) {
-          // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
-          // console.log('leaving prematurely at j = '+j);
-          genome.copyFrom(genomeBackup);
-          break;
-        } else {
-          initError = finalError;
-          genomeBackup = genome.copy();
-        }
+      console.log("Backward pass completed."); 
+      finalError = findTotalError();
+      console.log(avgError, finalError)
+      if (finalError > initError) {
+        // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
+        // console.log('leaving prematurely at j = '+j);
+        genome.copyFrom(genomeBackup);
+        break;
+      } else {
+        initError = finalError;
+        genomeBackup = genome.copy();
       }
+
+        // if (j > 0 && j % 20 === 0) {
+        //   finalError = findTotalError();
+        //   console.log(avgError, finalError)
+        //   if (finalError > initError) {
+        //     // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
+        //     // console.log('leaving prematurely at j = '+j);
+        //     genome.copyFrom(genomeBackup);
+        //     break;
+        //   } else {
+        //     initError = finalError;
+        //     genomeBackup = genome.copy();
+        //   }
+        // }
 
     }
 
@@ -771,20 +795,24 @@ function colorClusters() {
 
 }
 
-function backprop(n,_clusterMode) {
+async function backprop(n,_clusterMode) {
 
   var clusterMode = true; // by default, we would cluster stuff (takes time)
   if (typeof _clusterMode !== 'undefined') {
     clusterMode = _clusterMode;
   }
 
-  var f = function(g) {
+  var f = async function(g) {
     if (n > 1) {
-      return fitnessFunc(g, true, n);
+      console.log("Calling fitnessFunc for genome...");
+      return await fitnessFunc(g, true, n);
     }
-    return fitnessFunc(g, false, 1);
+    return await fitnessFunc(g, false, 1);
   };
-  trainer.applyFitnessFunc(f, clusterMode);
+  await trainer.applyFitnessFunc(f, data, label, clusterMode, n);
+
+  console.log("backprop finished. Hiding spinner now...");
+
   genome = trainer.getBestGenome();
   if (typeof genome.cluster !== 'undefined') {
     selectedCluster = genome.cluster;
@@ -842,7 +870,7 @@ function calculateAccuracy() {
 $("#sgd_button").click(function() {
   $("#controlPanel").fadeOut(500, "swing", function() {
     $("#loadingSpinner").fadeIn(500, "swing", function() {
-      backprop(nBackprop);
+      backprop(nBackprop);      
       $("#loadingSpinner").fadeOut(500, "swing", function() {
         $("#controlPanel").fadeIn(500, "swing");
       });
@@ -850,34 +878,91 @@ $("#sgd_button").click(function() {
   });
 });
 
-$("#evolve_button").click(function() {
+// $("#evolve_button").click(async function() {
+//   console.log("Button clicked!");
 
-  $("#controlPanel").fadeOut(500, "swing", function() {
-    $("#loadingSpinner").fadeIn(500, "swing", function() {
+//   $("#controlPanel").fadeOut(500, "swing", function() {
+//     console.log("Control panel faded out!");
+//     $("#loadingSpinner").show(); // Force visibility
+//     console.log("Spinner should be visible now.");
 
-      // beginning of callback hell
-      trainer.evolve();
+//   // $("#loadingSpinner").fadeIn(500, "swing", async function() {
+//     $("#loadingSpinner").fadeIn(500, "swing", async function() {
+//       console.log("Spinner animation done!");
+//       try{
+//         await new Promise(resolve => setTimeout(resolve, 0));
+//         // beginning of callback hell
+//         console.log("Trainer evolving...");
+        
+//         trainer.evolve();
+//         // compress network:
+//         /*
+//         compressor.buildMap(trainer.getAllGenes());
+//         compressor.compressNEAT();
+//         compressor.compressGenes(trainer.genes);
+//         compressor.compressGenes(trainer.hallOfFame);
+//         compressor.compressGenes(trainer.bestOfSubPopulation);
+//         */
+//         // finished compression
+//         console.log("Calling backprop...");
+//         await backprop(nBackprop);
+//         console.log("Backprop finished.");
+//         // end of callback hell
+//       } catch (error) {
+//         console.error("Error in backprop:", error);
+//       } finally {
+//         $("#loadingSpinner").fadeOut(500, "swing", function() {
+//           $("#controlPanel").fadeIn(500, "swing");
+//         });
+//       }
+//     });
+//   });
 
-      // compress network:
-      /*
-      compressor.buildMap(trainer.getAllGenes());
-      compressor.compressNEAT();
-      compressor.compressGenes(trainer.genes);
-      compressor.compressGenes(trainer.hallOfFame);
-      compressor.compressGenes(trainer.bestOfSubPopulation);
-      */
+// });
 
-      // finished compression
-      backprop(nBackprop);
-      // end of callback hell
-
-      $("#loadingSpinner").fadeOut(500, "swing", function() {
-        $("#controlPanel").fadeIn(500, "swing");
+$("#evolve_button").click(async function() {
+  console.log("Button clicked!");
+  // Ensure controlPanel is visible before calling fadeOut
+  if ($("#controlPanel").is(":visible")) {
+    await new Promise(resolve => {
+      $("#controlPanel").fadeOut(500, "swing", function() {
+        console.log("Control panel faded out!");
+        resolve();
       });
     });
+  } else {
+    console.log("Control panel was already hidden, skipping fadeOut.");
+  }
+
+  $("#loadingSpinner").show();
+  console.log("Spinner should be visible now.");
+
+  await new Promise(resolve => {
+    $("#loadingSpinner").fadeIn(500, "swing", resolve);
   });
 
+  console.log("Spinner animation done!");
+
+  try {
+    console.log("Trainer evolving...");
+    await trainer.evolve();
+
+    console.log("Calling backprop...");
+    await backprop(nBackprop);
+    console.log("Backprop finished.");
+  } catch (error) {
+    console.error("Error in training or backprop:", error);
+  } finally {
+    console.log("Fading out spinner...");
+    await new Promise(resolve => {
+      $("#loadingSpinner").fadeOut(500, "swing", resolve);
+    });
+
+    console.log("Spinner hidden, showing control panel.");
+    $("#controlPanel").fadeIn(500, "swing");
+  }
 });
+
 
 $("#cluster0").click(function() {
   setCluster(0);
@@ -1005,7 +1090,7 @@ $("#customDataBlue").click(function() {
   customDataMode = 1;
   colorCustomDataChoice();
 });
-$("#customDataSubmit").click(function(){
+$("#customDataSubmit").click(async function(){
   if (customDataList[0].length >= requiredCustomData && customDataList[0].length >= requiredCustomData) {
     shuffleParticleList(customDataList[0]);
     shuffleParticleList(customDataList[1]);
@@ -1027,7 +1112,7 @@ $("#customDataSubmit").click(function(){
     // at the beginning, evolve a few times
     for (var i=0;i<1;i++) {
       trainer.evolve();
-      backprop(1);
+      await backprop(1);
     }
     renderGraph();
 
@@ -1051,7 +1136,7 @@ var devicePressed = function(x, y) {
 };
 
 $(function() {
-  $( "#dataChoiceMode" ).change( function (event) {
+  $( "#dataChoiceMode" ).change( async function (event) {
       var theChoice = event.target.selectedIndex;
       if (theChoice <= 3) {
         dataSetChoice = theChoice;
@@ -1060,7 +1145,7 @@ $(function() {
         // at the beginning, evolve a few times
         for (var i=0;i<1;i++) {
           trainer.evolve();
-          backprop(1);
+          await backprop(1);
         }
         renderGraph();
       } else if (theChoice === 4) { // custom data

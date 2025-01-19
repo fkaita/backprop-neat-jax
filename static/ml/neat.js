@@ -344,6 +344,13 @@ var N = {};
         this.model.connections[i].w[0] = weightArray[i];
       }
     },
+    importWeightsNew: function(gweights) {
+      for (let i = 0; i < gweights.length; i++) {
+        const gw = gweights[i]; 
+        const windex = gw["0"];
+        this.model.connections[windex].w[0] = gw["1"];
+      }
+    },
     getAllConnections: function() {
       return connections;
     },
@@ -1119,11 +1126,25 @@ var N = {};
         g.fitness = f(g);
       }
     },
+    applyFitnessFuncToListNew: async function(geneList, inputList, targetList, nCycles) {
+      // Convert to JSON
+      const jsonGeneList = geneList.map(gene => gene.toJSON());
+      // Send to backend
+      const results = await Api.batchBackwardPass(jsonGeneList, inputList, targetList, nCycles);
+      // Assign updated genomes and fitness scores back to geneList
+      // DONOT forget to add penalty
+      var i, n;
+      var g;
+      for (i=0,n=geneList.length;i<n;i++) {
+        g = geneList[i];
+        g.fitness = results[i].avg_error; // DONOT forget to add penalty
+      }
+    },
     getAllGenes: function() {
       // returns the list of all the genes plus hall(s) of fame
       return this.genes.concat(this.hallOfFame).concat(this.bestOfSubPopulation);
     },
-    applyFitnessFunc: function(f, _clusterMode) {
+    applyFitnessFunc: async function(f, inputList, targetList, nCycles, _clusterMode) {
       // applies fitness function f on everyone including hall of famers
       // in the future, have the option to avoid hall of famers
       var i, n;
@@ -1135,10 +1156,20 @@ var N = {};
       if (typeof _clusterMode !== 'undefined') {
         clusterMode = _clusterMode;
       }
+      if (nCycles == 1){
+        this.applyFitnessFuncToList(f, this.genes);
+        this.applyFitnessFuncToList(f, this.hallOfFame);
+        this.applyFitnessFuncToList(f, this.bestOfSubPopulation);
+      }else{
+        console.log("started to apply funcs")
+        await this.applyFitnessFuncToListNew(this.genes, inputList, targetList, nCycles);
+        console.log("finished to apply one func")
+        await this.applyFitnessFuncToListNew(this.hallOfFame, inputList, targetList, nCycles);
+        console.log("finished second")
+        await this.applyFitnessFuncToListNew(this.bestOfSubPopulation, inputList, targetList, nCycles);
+        console.log("finished third")
+      }
 
-      this.applyFitnessFuncToList(f, this.genes);
-      this.applyFitnessFuncToList(f, this.hallOfFame);
-      this.applyFitnessFuncToList(f, this.bestOfSubPopulation);
 
       this.filterFitness();
       this.genes = this.genes.concat(this.hallOfFame);

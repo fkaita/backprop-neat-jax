@@ -79,11 +79,7 @@ def backward():
         targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
         nCycles = data.get("nCycles", 1)  # Get training cycles (default = 1)
 
-         # Perform multiple training iterations
-        for _ in range(nCycles):
-            updated_genome, avg_error, predictions = neat_model.backward(inputs, targets)
-
-        updated_genome, avg_error, predictions = neat_model.backward(inputs, targets)
+        updated_genome, avg_error, predictions = neat_model.backward(inputs, targets, nCycles)
         return jsonify({
             "updated_genome": updated_genome,
             "avg_error": avg_error,
@@ -94,6 +90,56 @@ def backward():
                 "dw": predictions["dw"]  # Gradients as Float32Array
             }
         })
+    except Exception as e:
+        print("Exception Traceback:", traceback.format_exc())  # Log full traceback
+        return jsonify({"error": str(e)}), 500
+    
+
+@app.route('/batch_backward', methods=['POST'])
+def batch_backward():
+    """Perform backward pass on multiple genomes in parallel and return updated genomes."""
+    global neat_model
+    print("started batch")
+
+    try:
+        data = request.json
+        # print(data)
+        gene_list = data["genes"]  # List of genome JSON objects
+        nCycles = data.get("nCycles", 1)  # Training cycles (default = 1)
+        if not gene_list:
+            return jsonify([]) # Return empty list
+        
+        print("got data")
+        
+        # Initialize the NEAT model using the first genome in the list
+        json_gene_list = []
+        for gene in gene_list:
+            try:
+                gene = json.loads(gene)
+                json_gene_list.append(gene)
+            except json.JSONDecodeError:
+                return jsonify({"error": "Invalid genome format, could not parse JSON"}), 400
+            
+        first_gene = json_gene_list[0]
+    
+        if neat_model is None:
+            neat_model = NEATModel(first_gene)
+        print("init model")
+
+        # Extract shared inputs and targets (same for all genomes)
+        inputs_w = list(data["inputs"]["w"].values())
+        targets_w = list(data["targets"]["w"].values())
+
+        inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
+        targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
+
+        # Call batch_backward function from NEATModel
+        print("started model")
+        results = neat_model.batch_backward(json_gene_list, inputs, targets, nCycles)
+        print("finished model")
+
+        return jsonify(results)  # Convert JAX arrays to lists for JSON response
+
     except Exception as e:
         print("Exception Traceback:", traceback.format_exc())  # Log full traceback
         return jsonify({"error": str(e)}), 500

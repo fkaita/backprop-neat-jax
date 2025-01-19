@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 from jax import jit, grad
 from jax.example_libraries import optimizers
+import jax.random as jrandom
 
 # Define activation functions
 def tanh(x): return jax.nn.tanh(x)
@@ -80,16 +81,22 @@ class NEATModel:
         preds = self.forward(inputs)
         return -jnp.mean(targets * jnp.log(preds) + (1 - targets) * jnp.log(1 - preds))  # BCE loss
 
-    def backward(self, inputs, targets):
+    def backward(self, inputs, targets, nCycles=1):
         """ Compute gradients and update weights (without `jit` on self) """
         # loss_grad_fn = jit(grad(self.loss))  # `jit` applied to grad function only
         # grads = loss_grad_fn(self.W, inputs, targets)  # Compute gradients
-        preds = self.forward(inputs)  # Compute forward pass explicitly
-        loss_grad_fn = jit(grad(lambda W: self.loss(W, inputs, targets)))  # Use precomputed preds
-        grads = loss_grad_fn(self.W)  # Compute gradients
+        nCycles = 1
+        for _ in range(nCycles):
+            # Random sample for batch training
+            batch_indices = jrandom.choice(jrandom.PRNGKey(0), inputs.shape[0], shape=(10,), replace=False)
+            batch_inputs = inputs #[batch_indices]
+            batch_targets = targets #[batch_indices]
+            preds = self.forward(batch_inputs)  # Compute forward pass explicitly
+            loss_grad_fn = jit(grad(lambda W: self.loss(W, batch_inputs, batch_targets)))  # Use precomputed preds
+            grads = loss_grad_fn(self.W)  # Compute gradients
 
-        self.opt_state = self.opt_update(0, grads, self.opt_state)  # Update optimizer state
-        self.W = self.get_params(self.opt_state)  # Apply updated weights
+            self.opt_state = self.opt_update(0, grads, self.opt_state)  # Update optimizer state
+            self.W = self.get_params(self.opt_state)  # Apply updated weights
 
         # Convert updated W into genome format (dictionary keys "0", "1", "2")
         for genome in self.genome_json["genome"]:
@@ -112,6 +119,27 @@ class NEATModel:
             "dw": grad_list  # Gradients as a flat list (similar to how `dw` works in JS)
         }
         return self.genome_json, avg_error, formatted_preds  # Return updated weights
+    
+    def batch_backward(self, gene_list, inputs, targets, nCycles=1):
+        """ Perform backward pass on multiple genomes in parallel """
+        # def process_gene(gene):
+        #     model = NEATModel(gene)  # Create NEAT model instance for each genome
+        #     return model.backward(inputs, targets, nCycles)
+
+        # batch_process_fn = jax.vmap(process_gene, in_axes=(0,))
+        # return batch_process_fn(jnp.array(gene_list))
+        results = []
+        for gene in gene_list:
+            # print(gene)
+            model = NEATModel(gene)  # Create NEAT model instance for each genome
+            updated_genome, avg_error, predictions = model.backward(inputs, targets, nCycles)
+            results.append({
+                "updated_genome": updated_genome,
+                "avg_error": avg_error,
+                "output": predictions
+            })
+
+        return results  # Return as a list instead of JAX array
 
 
 if __name__ == "__main__":
