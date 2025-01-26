@@ -522,7 +522,6 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
           genome.fitness = response.avgError;
 
           avgError = response.avgError;
-          console.log(avgError)
           output[0] = response.output;
       } catch (error) {
           console.error('Error during weight optimization:', error);
