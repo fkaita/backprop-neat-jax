@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 import jax
 import jax.numpy as jnp
+
+import numpy as np
 from neat import NEATModel
 import json
 import traceback
@@ -107,9 +109,6 @@ def backward():
 def batch_backward():
     """Perform backward pass on multiple genomes in parallel and return updated genomes."""
     global neat_model
-    # Clear cash
-    jax.clear_caches()
-
     try:
         data = request.json
         # print(data)
@@ -117,6 +116,9 @@ def batch_backward():
         nCycles = data.get("nCycles", 1)  # Training cycles (default = 1)
         if not gene_list:
             return jsonify([]) # Return empty list
+        
+        # Clear old memory
+        jax.clear_caches()
         
         print("got data")
         
@@ -133,8 +135,8 @@ def batch_backward():
             neat_model = NEATModel(json_gene_list)
 
         # Extract shared inputs and targets (same for all genomes)
-        inputs_w = list(data["inputs"]["w"].values())
-        targets_w = list(data["targets"]["w"].values())
+        inputs_w = np.array(list(data["inputs"]["w"].values()), dtype=np.float16)
+        targets_w = np.array(list(data["targets"]["w"].values()), dtype=np.float16)
 
         # Reshape and add bias
         inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
@@ -146,10 +148,22 @@ def batch_backward():
         print(f"Input is {inputs_with_bias.shape}", f"target is {targets.shape}")
         print(f"first gene is {gene_list[0]}")
 
+        # Use JAX for memory efficiency
+        inputs = jax.device_put(inputs)
+        targets = jax.device_put(targets)
+
+        # @jax.jit
+        # def batched_train(neat_model, inputs, targets, nCycles):
+        #     return neat_modßel.train(inputs, targets, nCycles)
+
         # Call batch_backward function from NEATModel
         print("started model")
         results = neat_model.train(inputs_with_bias, targets, nCycles)
+        # results = batched_train(neat_model, inputs, targets, nCycles)
         print("finished model")
+
+        # Free up GPU memory
+        jax.clear_caches()
 
         return jsonify(results)  # Convert JAX arrays to lists for JSON response
 

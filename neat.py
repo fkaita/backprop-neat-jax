@@ -46,12 +46,32 @@ OUTPUT_NODE = 3 # Mannually set output node HERE.
 ACTIVATION_MAP = (dummy, dummy, dummy, sigmoid, tanh, relu, gaussian, sin, cos, abs) # Mannually set activation fucntion  HERE.
 key = random.PRNGKey(0)
 
+def compress(genome):
+    nodes = genome['nodes']
+    conns = genome['connections']
+    small_nodes = []
+    small_conns = []
+    max_conn_id = max(set(gen["0"] for gen in genome['genome']))
+    small_conns = conns[:max_conn_id+1]
+    max_node_id = max(set(x for sublist in small_conns for x in sublist))
+    small_nodes = nodes[:max_node_id+1]
+
+    res = {}
+    res['genome'] = genome['genome']
+    res['nodes'] = small_nodes
+    res['connections'] = small_conns
+
+    return res
+
 # Parallel training for multiple genomes 
 class NEATModel:
     def __init__(self, genome_list, lr=0.01):
         # Initialize population
         self.num_genomes = len(genome_list)
-        self.genome_list = genome_list
+        self.original_genome_list = genome_list.copy()
+
+        # Compress genomes 
+        genome_list = [compress(gen) for gen in genome_list]
         
         # Find longest genome and step
         self.max_nodes = 0
@@ -66,6 +86,7 @@ class NEATModel:
                 self.max_nodes = num_nodes
 
             conns = genome_json['connections']
+            # print(conns, num_nodes)
             steps = sort_graph(conns, num_nodes, START_NODES)
             steps_list.append(steps)
             if len(steps) > max_steps:
@@ -89,10 +110,10 @@ class NEATModel:
         for idx, genome_json in enumerate(genome_list):
             # Get values from json
             nodes = jnp.array(genome_json['nodes'])
-            padded_nodes = jnp.zeros(self.max_nodes, dtype=jnp.int32)
-            padded_nodes = padded_nodes.at[:len(nodes)].set(jnp.array(nodes, dtype=jnp.int32))
+            padded_nodes = jnp.zeros(self.max_nodes, dtype=jnp.int16)
+            padded_nodes = padded_nodes.at[:len(nodes)].set(jnp.array(nodes, dtype=jnp.int16))
 
-            adj_matrix = jnp.zeros((self.max_nodes, self.max_nodes), dtype=jnp.float32)
+            adj_matrix = jnp.zeros((self.max_nodes, self.max_nodes), dtype=jnp.bool_)
             conns = genome_json['connections']
 
             # Create Adjacency Matrix that represents graph
@@ -100,7 +121,7 @@ class NEATModel:
             adj_matrix = adj_matrix.at[src, dst].set(1)
 
             # Create weight matrix
-            weight_matrix = jnp.zeros((self.max_nodes, self.max_nodes), dtype=jnp.float32)
+            weight_matrix = jnp.zeros((self.max_nodes, self.max_nodes), dtype=jnp.float16)
             for gen in genome_json['genome']:
                 conn = conns[gen["0"]]
                 if gen["2"] == 1:
@@ -160,7 +181,7 @@ class NEATModel:
             # step = jnp.unique(step, axis=1) # Select only unique step (because multiple 0 in step)
             
             # Create matrix with shape # of genome x # of max nodes x # of max nodes
-            sub_matrix = jnp.zeros((self.num_genomes, self.max_nodes, self.max_nodes), dtype=jnp.float32) 
+            sub_matrix = jnp.zeros((self.num_genomes, self.max_nodes, self.max_nodes), dtype=jnp.float16) 
             sub_matrix = sub_matrix.at[:, :, step].set(weight_matrix[:, :, step]) # Select weight in the step
             sub_matrix = sub_matrix * net['adj_matrix'] # Only existing connections
             input_vector += jax.vmap(jnp.dot, in_axes=(0, 0))(input_vector, sub_matrix)
@@ -190,6 +211,7 @@ class NEATModel:
         return jnp.sum(grads, axis=1) # Reduce zero matrixes from jcov
     
     def train(self, inputs, target_values, nCycles=100, batch_size=2):
+        jax.clear_caches()
 
         for cycle in range(nCycles):
             # Randomly select items
@@ -213,7 +235,7 @@ class NEATModel:
 
         # Update weight
         new_genome_list = []
-        for i, genome_json in enumerate(self.genome_list):
+        for i, genome_json in enumerate(self.original_genome_list):
             # Get weight matrix for genome
             weight_matrix = self.stacked_networks["weight_matrix"][i]
             # Get connections
@@ -293,8 +315,8 @@ if __name__ == "__main__":
     }
     genome_list.append(genome_json)
 
-    inputs = jnp.array([[0.5,0.2,-0.8], [0.1,0.1,-0.2]], dtype=jnp.float32)
-    target_values = jnp.array([1, 0], dtype=jnp.float32)
+    inputs = jnp.array([[0.5,0.2,-0.8], [0.1,0.1,-0.2]], dtype=jnp.float16)
+    target_values = jnp.array([1, 0], dtype=jnp.float16)
 
 
     # Initialize NEAT model
