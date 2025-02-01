@@ -65,7 +65,7 @@ var N = {};
   // var activations = [NODE_SIGMOID, NODE_TANH, NODE_RELU, NODE_GAUSSIAN, NODE_SIN, NODE_COS, NODE_MULT, NODE_ABS, NODE_ADD, NODE_SQUARE];
 
   // keep below for generating images, for the default.
-  var activations_default = [NODE_SIGMOID, NODE_TANH, NODE_RELU, NODE_GAUSSIAN, NODE_SIN, NODE_ABS, NODE_MULT, NODE_SQUARE, NODE_ADD];
+  var activations_default = [NODE_SIGMOID, NODE_TANH, NODE_RELU, NODE_GAUSSIAN, NODE_SIN, NODE_ABS];
   var activations_all = [NODE_SIGMOID, NODE_TANH, NODE_RELU, NODE_GAUSSIAN, NODE_SIN, NODE_COS, NODE_MULT, NODE_ABS, NODE_ADD, NODE_MGAUSSIAN, NODE_SQUARE];
   var activations_minimal = [NODE_RELU, NODE_TANH, NODE_GAUSSIAN, NODE_ADD];
 
@@ -631,7 +631,7 @@ var N = {};
       // run this function _after_ setupModel() is called!
       var i, j;
       var n = input.n;
-      var d = input.d;
+      var d = input.d; // Devide input by 5
       var inputNodeList = getNodeList(NODE_INPUT);
       var biasNodeList = getNodeList(NODE_BIAS);
       var dBias = biasNodeList.length;
@@ -1128,11 +1128,12 @@ var N = {};
         g.fitness = f(g);
       }
     },
-    applyFitnessFuncToListNew: async function(geneList, inputList, targetList, nCycles) {
+    applyFitnessFuncToListNew: async function(geneList, inputList, targetList, nCycles, learnRate) {
       // Convert to JSON
       const jsonGeneList = geneList.map(gene => gene.toJSON());
       // Send to backend
-      const results = await Api.batchBackwardPass(jsonGeneList, inputList, targetList, nCycles);
+      const results = await Api.batchBackwardPass(jsonGeneList, inputList, targetList, nCycles, learnRate);
+      console.log('response is:', results)
       // Assign updated genomes and fitness scores back to geneList
       // DONOT forget to add penalty
       var i, n;
@@ -1148,7 +1149,7 @@ var N = {};
       // returns the list of all the genes plus hall(s) of fame
       return this.genes.concat(this.hallOfFame).concat(this.bestOfSubPopulation);
     },
-    applyFitnessFunc: async function(f, inputList, targetList, nCycles, _clusterMode) {
+    applyFitnessFunc: async function(f, inputList, targetList, nCycles, learnRate, _clusterMode) {
       // applies fitness function f on everyone including hall of famers
       // in the future, have the option to avoid hall of famers
       var i, n;
@@ -1174,7 +1175,7 @@ var N = {};
         this.genes = this.genes.concat(this.hallOfFame);
         this.genes = this.genes.concat(this.bestOfSubPopulation);  
         console.log("started to apply new funcs")
-        await this.applyFitnessFuncToListNew(this.genes, inputList, targetList, nCycles);
+        await this.applyFitnessFuncToListNew(this.genes, inputList, targetList, nCycles, learnRate);
         console.log("finished apply new func")
 
       }

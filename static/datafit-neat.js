@@ -821,7 +821,7 @@ function colorClusters() {
 
 }
 
-async function backprop(n,_clusterMode) {
+async function backprop(n, learnRate, _clusterMode) {
 
   var clusterMode = true; // by default, we would cluster stuff (takes time)
   if (typeof _clusterMode !== 'undefined') {
@@ -835,7 +835,8 @@ async function backprop(n,_clusterMode) {
     }
     return await fitnessFunc(g, false, 1);
   };
-  await trainer.applyFitnessFunc(f, data, label, n, clusterMode);
+  await trainer.applyFitnessFunc(f, data, label, n, learnRate, clusterMode);
+  calculateAccuracy();
 
   console.log("backprop finished. Hiding spinner now...");
 
@@ -896,7 +897,7 @@ function calculateAccuracy() {
 $("#sgd_button").click(function() {
   $("#controlPanel").fadeOut(500, "swing", function() {
     $("#loadingSpinner").fadeIn(500, "swing", function() {
-      backprop(nBackprop);      
+      backprop(nBackprop, learnRate);      
       $("#loadingSpinner").fadeOut(500, "swing", function() {
         $("#controlPanel").fadeIn(500, "swing");
       });
@@ -1006,7 +1007,7 @@ $("#evolve_button").click(function() {
       */
 
       // finished compression
-      backprop(nBackprop);
+      backprop(nBackprop, learnRate);
       // end of callback hell
 
       $("#loadingSpinner").fadeOut(500, "swing", function() {

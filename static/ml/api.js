@@ -101,9 +101,10 @@
      * @param {Object} inputs - Shared input batch
      * @param {Object} targets - Shared target batch
      * @param {number} nCycles - Number of training cycles (default = 1)
+     * @param {number} learnRate - learning rate
      * @returns {Promise<Array>} List of updated genomes and errors
      */
-    async function batchBackwardPass(geneList, inputs, targets, nCycles = 1) {
+    async function batchBackwardPass(geneList, inputs, targets, nCycles = 1, learnRate=0.01) {
         // console.log(geneList)
         // console.log(inputs)
         // console.log(targets)
@@ -117,6 +118,7 @@
                 inputs,  // Send shared inputs
                 targets,  // Send shared targets
                 nCycles,
+                learnRate,
             }),
         });
 

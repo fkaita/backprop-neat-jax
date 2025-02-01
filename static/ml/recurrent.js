@@ -254,9 +254,9 @@ var R = {};
   };
   Graph.prototype = {
     backward: function() {
-      // for(var i=this.backprop.length-1;i>=0;i--) {
-      //   this.backprop[i](); // tick!
-      // }
+      for(var i=this.backprop.length-1;i>=0;i--) {
+        this.backprop[i](); // tick!
+      }
     },
     rowPluck: function(m, ix) {
       // pluck a row of m with index ix and return it as col vector

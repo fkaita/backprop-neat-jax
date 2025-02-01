@@ -108,12 +108,12 @@ def backward():
 @app.route('/batch_backward', methods=['POST'])
 def batch_backward():
     """Perform backward pass on multiple genomes in parallel and return updated genomes."""
-    global neat_model
     try:
         data = request.json
         # print(data)
         gene_list = data["genes"]  # List of genome JSON objects
         nCycles = data.get("nCycles", 1)  # Training cycles (default = 1)
+        learnRate = data.get("learnRate", 0.01)
         if not gene_list:
             return jsonify([]) # Return empty list
         
@@ -131,27 +131,25 @@ def batch_backward():
             except json.JSONDecodeError:
                 return jsonify({"error": "Invalid genome format, could not parse JSON"}), 400
     
-        if neat_model is None:
-            neat_model = NEATModel(json_gene_list)
+        neat_model = NEATModel(json_gene_list, lr=learnRate)
 
         # Extract shared inputs and targets (same for all genomes)
         inputs_w = np.array(list(data["inputs"]["w"].values()), dtype=np.float16)
         targets_w = np.array(list(data["targets"]["w"].values()), dtype=np.float16)
 
         # Reshape and add bias
-        inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
+        inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"])) #S/ 5
         bias = jnp.ones((data["inputs"]["n"], 1))
         inputs_with_bias = jnp.concatenate([inputs, bias], axis=1)
         targets = jnp.array(targets_w)
 
         print(f"number of gen is {len(gene_list)}")
         print(f"Input is {inputs_with_bias.shape}", f"target is {targets.shape}")
-        print(f"first gene is {gene_list[0]}")
+        print(f"first gene is {json_gene_list[0]}")
+        print(f"second gene is {json_gene_list[1]}")
+        print("input values are", inputs)
 
         # Use JAX for memory efficiency
-        inputs = jax.device_put(inputs)
-        targets = jax.device_put(targets)
-
         # @jax.jit
         # def batched_train(neat_model, inputs, targets, nCycles):
         #     return neat_modßel.train(inputs, targets, nCycles)
