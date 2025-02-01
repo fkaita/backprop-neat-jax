@@ -577,6 +577,7 @@ var N = {};
       return child;
     },
     setupModel: function(inputDepth) {
+      // This sets this.connection into this.model.connection
       // setup recurrent.js model
       var i;
       var nNodes = nodes.length;
@@ -598,6 +599,7 @@ var N = {};
       this.model.connections = connectionModel;
     },
     updateModelWeights: function() {
+      // This update this.model.connection into this.connection
       // assume setupModel is already run. updates internal weights
       // after backprop is performed
       var i, n, m, cIndex;
@@ -1137,7 +1139,9 @@ var N = {};
       var g;
       for (i=0,n=geneList.length;i<n;i++) {
         g = geneList[i];
-        g.fitness = results[i].avg_error; // DONOT forget to add penalty
+        // console.log(results.genome_list[i])
+        g.fromJSON(results.genome_list[i])
+        g.fitness = results.fitness[i]; // DONOT forget to add penalty
       }
     },
     getAllGenes: function() {
@@ -1155,25 +1159,27 @@ var N = {};
       var clusterMode = true; // by default, we would cluster stuff (takes time)
       if (typeof _clusterMode !== 'undefined') {
         clusterMode = _clusterMode;
-      }
-      if (nCycles == 1){
+      }  
+      console.log("n cycle is.. ", nCycles)
+
+      if (nCycles==1){
+        console.log("started to apply old funcs")
         this.applyFitnessFuncToList(f, this.genes);
         this.applyFitnessFuncToList(f, this.hallOfFame);
         this.applyFitnessFuncToList(f, this.bestOfSubPopulation);
+        console.log("finished apply old func")
+        this.genes = this.genes.concat(this.hallOfFame);
+        this.genes = this.genes.concat(this.bestOfSubPopulation);  
       }else{
-        console.log("started to apply funcs")
+        this.genes = this.genes.concat(this.hallOfFame);
+        this.genes = this.genes.concat(this.bestOfSubPopulation);  
+        console.log("started to apply new funcs")
         await this.applyFitnessFuncToListNew(this.genes, inputList, targetList, nCycles);
-        console.log("finished to apply one func")
-        await this.applyFitnessFuncToListNew(this.hallOfFame, inputList, targetList, nCycles);
-        console.log("finished second")
-        await this.applyFitnessFuncToListNew(this.bestOfSubPopulation, inputList, targetList, nCycles);
-        console.log("finished third")
+        console.log("finished apply new func")
+
       }
-
-
+      
       this.filterFitness();
-      this.genes = this.genes.concat(this.hallOfFame);
-      this.genes = this.genes.concat(this.bestOfSubPopulation);
       this.sortByFitness(this.genes);
 
       // cluster before spinning off hall of fame:

@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
+import jax
 import jax.numpy as jnp
 from neat import NEATModel
 import json
@@ -32,6 +33,13 @@ def initialize():
     genome_json = data.get("genome")
     learning_rate = data.get("learning_rate", 0.01)
 
+    # Extract shared inputs and targets (same for all genomes)
+    # inputs_w = list(data["inputs"]["w"].values())
+    # targets_w = list(data["targets"]["w"].values())
+
+    # inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
+    # targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
+
     if isinstance(genome_json, str):
         try:
             genome_json = json.loads(genome_json)
@@ -42,7 +50,7 @@ def initialize():
         return jsonify({"error": "Invalid genome format, expected a JSON object"}), 400
 
     
-    neat_model = NEATModel(genome_json, learning_rate=learning_rate)  # Initialize the model
+    neat_model = NEATModel(genome_json, inputs, targets, learning_rate=learning_rate)  # Initialize the model
     return jsonify({"message": "NEAT model initialized successfully"})
 
 
@@ -99,7 +107,8 @@ def backward():
 def batch_backward():
     """Perform backward pass on multiple genomes in parallel and return updated genomes."""
     global neat_model
-    print("started batch")
+    # Clear cash
+    jax.clear_caches()
 
     try:
         data = request.json
@@ -119,23 +128,27 @@ def batch_backward():
                 json_gene_list.append(gene)
             except json.JSONDecodeError:
                 return jsonify({"error": "Invalid genome format, could not parse JSON"}), 400
-            
-        first_gene = json_gene_list[0]
     
         if neat_model is None:
-            neat_model = NEATModel(first_gene)
-        print("init model")
+            neat_model = NEATModel(json_gene_list)
 
         # Extract shared inputs and targets (same for all genomes)
         inputs_w = list(data["inputs"]["w"].values())
         targets_w = list(data["targets"]["w"].values())
 
+        # Reshape and add bias
         inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
-        targets = jnp.array(targets_w).reshape((data["targets"]["n"], data["targets"]["d"]))
+        bias = jnp.ones((data["inputs"]["n"], 1))
+        inputs_with_bias = jnp.concatenate([inputs, bias], axis=1)
+        targets = jnp.array(targets_w)
+
+        print(f"number of gen is {len(gene_list)}")
+        print(f"Input is {inputs_with_bias.shape}", f"target is {targets.shape}")
+        print(f"first gene is {gene_list[0]}")
 
         # Call batch_backward function from NEATModel
         print("started model")
-        results = neat_model.batch_backward(json_gene_list, inputs, targets, nCycles)
+        results = neat_model.train(inputs_with_bias, targets, nCycles)
         print("finished model")
 
         return jsonify(results)  # Convert JAX arrays to lists for JSON response

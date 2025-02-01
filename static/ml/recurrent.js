@@ -504,67 +504,67 @@ var R = {};
   };
   Solver.prototype = {
     step: function(model, step_size, regc, clipval) {
-      // // perform parameter update
-      // var solver_stats = {};
-      // var num_clipped = 0;
-      // var num_tot = 0;
-      // for(var k in model) {
-      //   if(model.hasOwnProperty(k)) {
-      //     var m = model[k]; // mat ref
-      //     if(!(k in this.step_cache)) { this.step_cache[k] = new Mat(m.n, m.d); }
-      //     var s = this.step_cache[k];
-      //     for(var i=0,n=m.w.length;i<n;i++) {
+      // perform parameter update
+      var solver_stats = {};
+      var num_clipped = 0;
+      var num_tot = 0;
+      for(var k in model) {
+        if(model.hasOwnProperty(k)) {
+          var m = model[k]; // mat ref
+          if(!(k in this.step_cache)) { this.step_cache[k] = new Mat(m.n, m.d); }
+          var s = this.step_cache[k];
+          for(var i=0,n=m.w.length;i<n;i++) {
 
-      //       // rmsprop adaptive learning rate
-      //       var mdwi = m.dw[i];
-      //       if (isNaN(mdwi)) {
-      //         /*
-      //         console.log('backprop has numerical issues.');
-      //         console.log('dWeight '+i+' is NaN');
-      //         console.log('setting dw to zero');
-      //         */
-      //         m.dw[i] = 0.0;
-      //         mdwi = 0.0;
-      //       }
-      //       s.w[i] = s.w[i] * this.decay_rate + (1.0 - this.decay_rate) * mdwi * mdwi;
+            // rmsprop adaptive learning rate
+            var mdwi = m.dw[i];
+            if (isNaN(mdwi)) {
+              /*
+              console.log('backprop has numerical issues.');
+              console.log('dWeight '+i+' is NaN');
+              console.log('setting dw to zero');
+              */
+              m.dw[i] = 0.0;
+              mdwi = 0.0;
+            }
+            s.w[i] = s.w[i] * this.decay_rate + (1.0 - this.decay_rate) * mdwi * mdwi;
 
-      //       // gradient clip
-      //       if(mdwi > clipval) {
-      //         mdwi = clipval;
-      //         num_clipped++;
-      //       }
-      //       if(mdwi < -clipval) {
-      //         mdwi = -clipval;
-      //         num_clipped++;
-      //       }
-      //       num_tot++;
+            // gradient clip
+            if(mdwi > clipval) {
+              mdwi = clipval;
+              num_clipped++;
+            }
+            if(mdwi < -clipval) {
+              mdwi = -clipval;
+              num_clipped++;
+            }
+            num_tot++;
 
-      //       if ((s.w[i] + this.smooth_eps) <= 0) {
-      //         console.log('rmsprop has numerical issues');
-      //         console.log('step_cache '+i+' = '+s.w[i]);
-      //         console.log('smooth_eps = '+this.smooth_eps);
-      //       }
+            if ((s.w[i] + this.smooth_eps) <= 0) {
+              console.log('rmsprop has numerical issues');
+              console.log('step_cache '+i+' = '+s.w[i]);
+              console.log('smooth_eps = '+this.smooth_eps);
+            }
 
-      //       // update (and regularize)
-      //       m.w[i] += - step_size * mdwi / Math.sqrt(Math.max(s.w[i],this.smooth_eps)) - regc * m.w[i];
-      //       m.dw[i] = 0; // reset gradients for next iteration
+            // update (and regularize)
+            m.w[i] += - step_size * mdwi / Math.sqrt(Math.max(s.w[i],this.smooth_eps)) - regc * m.w[i];
+            m.dw[i] = 0; // reset gradients for next iteration
 
-      //       // clip the actual weights as well
-      //       if(m.w[i] > clipval*10) {
-      //         //console.log('rmsprop clipped the weight with orig value '+m.w[i]);
-      //         m.w[i] = clipval*10;
-      //       } else if(m.w[i] < -clipval*10) {
-      //         //console.log('rmsprop clipped the weight with orig value '+m.w[i]);
-      //         m.w[i] = -clipval*10;
-      //       }
+            // clip the actual weights as well
+            if(m.w[i] > clipval*10) {
+              //console.log('rmsprop clipped the weight with orig value '+m.w[i]);
+              m.w[i] = clipval*10;
+            } else if(m.w[i] < -clipval*10) {
+              //console.log('rmsprop clipped the weight with orig value '+m.w[i]);
+              m.w[i] = -clipval*10;
+            }
 
-      //       assert(!isNaN(m.w[i]), 'weight '+i+' is NaN');
+            assert(!isNaN(m.w[i]), 'weight '+i+' is NaN');
 
-      //     }
-      //   }
-      // }
-      // solver_stats.ratio_clipped = num_clipped*1.0/num_tot;
-      // return solver_stats;
+          }
+        }
+      }
+      solver_stats.ratio_clipped = num_clipped*1.0/num_tot;
+      return solver_stats;
       return { ratio_clipped: 0 }; 
     }
   };

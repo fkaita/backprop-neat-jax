@@ -1,171 +1,307 @@
 import jax
 import jax.numpy as jnp
-from jax import jit, grad
-from jax.example_libraries import optimizers
-import jax.random as jrandom
+import jax.random as random
+import optax
+from collections import deque
+
+
+# Kahn's algorithm Sorting
+def sort_graph(edges, num_nodes, start_nodes):
+    adj_list = [[] for _ in range(num_nodes)]
+    in_degree = [0] * num_nodes
+
+    for u, v in edges:
+        adj_list[u].append(v)
+        in_degree[v] += 1
+
+    queue = deque(start_nodes)
+    steps = []
+    while queue:
+        layer_nodes = list(queue)
+        queue.clear()  # empty the queue so we can fill it with next layer
+        steps.append(layer_nodes)
+        
+        # For each node in this layer, reduce the in-degree of its children.
+        for node in layer_nodes:
+            for child in adj_list[node]:
+                in_degree[child] -= 1
+                if in_degree[child] == 0:
+                    queue.append(child)
+
+    return steps
 
 # Define activation functions
-def tanh(x): return jax.nn.tanh(x)
-def relu(x): return jax.nn.relu(x)
-def sigmoid(x): return jax.nn.sigmoid(x)
-def gaussian(x): return jnp.exp(-x**2)
+def dummy(x): return x
+def sigmoid(x): return 1 / (1 + jnp.exp(-x))
+def tanh(x): return jnp.tanh(x)
+def relu(x): return jnp.maximum(0, x)
+def gaussian(x): return jnp.exp(-x**2)  # Standard Gaussian function
 def sin(x): return jnp.sin(x)
 def cos(x): return jnp.cos(x)
-def abs_fn(x): return jnp.abs(x)
-def square(x): return x**2
-def identity(x): return x  # Default function if node type is not recognized
+def abs(x): return jnp.sign(x)
 
-# JAX-compatible activation function lookup using jax.lax.switch()
-@jit
-def activation_fn(x, node_type):
-    activation_list = [
-        sigmoid,   # 3
-        tanh,      # 4
-        relu,      # 5
-        gaussian,  # 6
-        sin,       # 7
-        cos,       # 8
-        abs_fn,    # 9
-        square,    # 13
-    ]
-    index = jnp.clip(node_type - 3, 0, len(activation_list) - 1)  # Ensure index is valid
-    return jax.vmap(lambda i, x: jax.lax.switch(i, activation_list, x))(index, x)
+# Manual parameters. Need to update when problem changed
+START_NODES = [0, 1, 2] # Mannually set starting node HERE. node 2 is bias.
+OUTPUT_NODE = 3 # Mannually set output node HERE.
+ACTIVATION_MAP = (dummy, dummy, dummy, sigmoid, tanh, relu, gaussian, sin, cos, abs) # Mannually set activation fucntion  HERE.
+key = random.PRNGKey(0)
 
+# Parallel training for multiple genomes 
 class NEATModel:
-    def __init__(self, genome_json, learning_rate=0.01):
-        self.num_inputs = genome_json["nInput"]
-        self.num_outputs = genome_json["nOutput"]
-        self.num_nodes = len(genome_json["nodes"])
-        self.node_types = jnp.array(genome_json["nodes"])
-
-        # Initialize weight matrix
-        self.W = jnp.zeros((self.num_nodes, self.num_nodes))
+    def __init__(self, genome_list, lr=0.01):
+        # Initialize population
+        self.num_genomes = len(genome_list)
+        self.genome_list = genome_list
         
-        # Populate weight matrix from genome (now handled as a dict)
-        connections = jnp.array(genome_json["connections"])
-        genomes = genome_json["genome"]  # List of Dictionary with keys "0", "1", "2"
+        # Find longest genome and step
+        self.max_nodes = 0
+        max_steps = 0
+        max_step_length = 0
+        steps_list = []
+        for genome_json in genome_list:
+            # Number of nodes
+            nodes = genome_json['nodes']
+            num_nodes = len(nodes)
+            if num_nodes > self.max_nodes:
+                self.max_nodes = num_nodes
 
-        for genome in genomes:
-            idx = int(genome["0"])  # Connection index
-            weight = genome["1"]    # Connection weight
-            active = int(genome["2"])  # Connection active status
-            if active:
-                i, j = int(connections[idx][0]), int(connections[idx][1])
-                self.W = self.W.at[i, j].set(weight)
+            conns = genome_json['connections']
+            steps = sort_graph(conns, num_nodes, START_NODES)
+            steps_list.append(steps)
+            if len(steps) > max_steps:
+                max_steps = len(steps)
 
-        # Output node indices (last `num_outputs` nodes)
-        self.output_nodes = jnp.arange(-self.num_outputs, 0)
+            if max(len(seq) for seq in steps) > max_step_length:
+                max_step_length = max(len(seq) for seq in steps)
         
-        # Optimizer
-        self.learning_rate = learning_rate
-        self.opt_init, self.opt_update, self.get_params = optimizers.adam(learning_rate)
-        self.opt_state = self.opt_init(self.W)
+        # Process each genome separately
+        self.networks = []
+        self.optimizers = []
+        self.opt_states = []
 
-        # Store original genome_json for updates
-        self.genome_json = genome_json
-
-    def forward(self, inputs):
-        """Forward pass of NEAT, handling batch inputs."""
-        batch_size = inputs.shape[0]
-
-        # Initialize X_new for batch processing
-        X_new = jnp.zeros((batch_size, self.num_nodes))
-        X_new = X_new.at[:, :self.num_inputs].set(inputs)  # Set input nodes per batch
-        X_new = jnp.dot(X_new, self.W.T)  # Matrix multiplication for batch
-        X_new = jax.vmap(lambda x: activation_fn(x, self.node_types))(X_new)
-
-        return jax.nn.sigmoid(X_new[:, self.output_nodes]) 
-
-    def loss(self, W, inputs, targets):
-        """ Binary Cross-Entropy Loss """
-        preds = self.forward(inputs)
-        return -jnp.mean(targets * jnp.log(preds) + (1 - targets) * jnp.log(1 - preds))  # BCE loss
-
-    def backward(self, inputs, targets, nCycles=1):
-        """ Compute gradients and update weights (without `jit` on self) """
-        # loss_grad_fn = jit(grad(self.loss))  # `jit` applied to grad function only
-        # grads = loss_grad_fn(self.W, inputs, targets)  # Compute gradients
-        nCycles = 1
-        for _ in range(nCycles):
-            # Random sample for batch training
-            batch_indices = jrandom.choice(jrandom.PRNGKey(0), inputs.shape[0], shape=(10,), replace=False)
-            batch_inputs = inputs #[batch_indices]
-            batch_targets = targets #[batch_indices]
-            preds = self.forward(batch_inputs)  # Compute forward pass explicitly
-            loss_grad_fn = jit(grad(lambda W: self.loss(W, batch_inputs, batch_targets)))  # Use precomputed preds
-            grads = loss_grad_fn(self.W)  # Compute gradients
-
-            self.opt_state = self.opt_update(0, grads, self.opt_state)  # Update optimizer state
-            self.W = self.get_params(self.opt_state)  # Apply updated weights
-
-        # Convert updated W into genome format (dictionary keys "0", "1", "2")
-        for genome in self.genome_json["genome"]:
-            idx = int(genome["0"])  # Connection index
-            if int(genome["2"]) == 1:  # If active
-                i, j = int(self.genome_json["connections"][idx][0]), int(self.genome_json["connections"][idx][1])
-                genome["1"] = float(self.W[i, j])  # Update weight
-
-        # Compute average loss for batch
-        avg_error = float(self.loss(self.W, inputs, targets))
-
-        # Format predictions to match JS structure (arrays instead of dicts)
-        pred_list = preds.flatten().tolist()  # Convert to a list
-        grad_list = grads.flatten().tolist()  # Convert gradients to a list
-
-        formatted_preds = {
-            "n": preds.shape[0],  # Number of samples (batch size)
-            "d": preds.shape[1],  # Number of outputs per sample
-            "w": pred_list,  # Predictions as a flat list
-            "dw": grad_list  # Gradients as a flat list (similar to how `dw` works in JS)
+        self.networks = {
+            "nodes": [],
+            "adj_matrix": [],
+            "weight_matrix": [],
+            "steps": []
         }
-        return self.genome_json, avg_error, formatted_preds  # Return updated weights
+
+        for idx, genome_json in enumerate(genome_list):
+            # Get values from json
+            nodes = jnp.array(genome_json['nodes'])
+            padded_nodes = jnp.zeros(self.max_nodes, dtype=jnp.int32)
+            padded_nodes = padded_nodes.at[:len(nodes)].set(jnp.array(nodes, dtype=jnp.int32))
+
+            adj_matrix = jnp.zeros((self.max_nodes, self.max_nodes), dtype=jnp.float32)
+            conns = genome_json['connections']
+
+            # Create Adjacency Matrix that represents graph
+            src, dst = jnp.array(conns).T
+            adj_matrix = adj_matrix.at[src, dst].set(1)
+
+            # Create weight matrix
+            weight_matrix = jnp.zeros((self.max_nodes, self.max_nodes), dtype=jnp.float32)
+            for gen in genome_json['genome']:
+                conn = conns[gen["0"]]
+                if gen["2"] == 1:
+                    weight_matrix = weight_matrix.at[conn[0], conn[1]].set(gen["1"]) # Assign weight from json genome
+
+            # Create step by Kahn's algorithm Sorting
+            # steps = sort_graph(conns, num_nodes, START_NODES)
+            padded_steps = []
+            steps = steps_list[idx]
+            for step in steps:
+                if len(step) < max_step_length:
+                    step += [0]*(max_step_length-len(step))
+                padded_steps.append(step)
+
+            for _ in range(max_steps - len(steps)):
+                padded_steps.append([0]*max_step_length) # This doesn't change result?? (NEED TO DOUBLE CHECK!!)
+            
+            # padded_steps = jnp.full(max_steps, fill_value=-1, dtype=jnp.int32)
+            # padded_steps = padded_steps.at[:len(steps)].set(jnp.array(steps, dtype=jnp.int32))
+            
+            # initialize optimizer
+            optimizer = optax.adagrad(learning_rate=lr, initial_accumulator_value=1e-8)
+            opt_state = optimizer.init(weight_matrix)
+
+            # Store genome-specific parameters
+            self.networks['nodes'].append(padded_nodes)
+            self.networks['adj_matrix'].append(adj_matrix)
+            self.networks['weight_matrix'].append(weight_matrix)
+            self.networks['steps'].append(padded_steps)
+            self.optimizers.append(optimizer)
+            self.opt_states.append(opt_state)
+
+        self.stacked_networks = {key: jnp.stack(jnp.array(self.networks[key])) for key in self.networks}
+
+    def forward(self, net=None):
+        # Get network
+        if net is None:
+            # fallback to self.networks
+            net = self.stacked_networks
+        
+        # Extract everything from networks_params
+        weight_matrix = net['weight_matrix']
+
+        def _apply_activation(x, index):
+            # for vmap function of activation function
+            return jax.lax.switch(index, ACTIVATION_MAP, x)
+
+        # Initialize input vector, zeros except inputs
+        batch_size = self.inputs.shape[0]
+        input_vector = jnp.zeros((batch_size, self.max_nodes))
+        input_vector = input_vector.at[:, jnp.array(START_NODES)].set(self.inputs)
+        # Expand input vector for all genome
+        input_vector = jnp.broadcast_to(input_vector, (self.num_genomes, input_vector.shape[0], input_vector.shape[1]))
+
+        for idx in range(1, net['steps'].shape[1]):
+            step = net['steps'][:,idx,:] # Select step for each genome
+            # step = jnp.unique(step, axis=1) # Select only unique step (because multiple 0 in step)
+            
+            # Create matrix with shape # of genome x # of max nodes x # of max nodes
+            sub_matrix = jnp.zeros((self.num_genomes, self.max_nodes, self.max_nodes), dtype=jnp.float32) 
+            sub_matrix = sub_matrix.at[:, :, step].set(weight_matrix[:, :, step]) # Select weight in the step
+            sub_matrix = sub_matrix * net['adj_matrix'] # Only existing connections
+            input_vector += jax.vmap(jnp.dot, in_axes=(0, 0))(input_vector, sub_matrix)
+
+
+            # Extract only functions for the node in step
+            activation_functions = jnp.zeros((self.num_genomes, self.max_nodes), dtype=int)
+            activation_functions = activation_functions.at[:, step].set(net['nodes'][:, step]) # Set activation function for each node
+            # print(input_vector)
+            # print(idx, activation_functions.shape, input_vector.shape)
+            
+            # Apply activation function two vmaps (vmap for each node and vmap for each genome)
+            vmap_apply_activation = jax.vmap(jax.vmap(_apply_activation, in_axes=(0, 0)), in_axes=(0, 0))
+            vmap_apply_activation(input_vector.transpose(0,2,1), activation_functions).transpose(0,2,1)
+        return input_vector[:, :, OUTPUT_NODE] # Out put for each genome and input
     
-    def batch_backward(self, gene_list, inputs, targets, nCycles=1):
-        """ Perform backward pass on multiple genomes in parallel """
-        # def process_gene(gene):
-        #     model = NEATModel(gene)  # Create NEAT model instance for each genome
-        #     return model.backward(inputs, targets, nCycles)
+    def mse_loss(self, weight_matrix):
+        # Assign updated weight matrix
+        networks_copy = dict(self.stacked_networks)
+        networks_copy['weight_matrix'] = weight_matrix
+        outputs = self.forward(networks_copy)
+        return jnp.mean((outputs - self.target_values) ** 2, axis=1) # Get loss for each genome
+    
+    def backward(self):
+        grads_fn = jax.jacrev(self.mse_loss)
+        grads = grads_fn(self.stacked_networks['weight_matrix'])
+        return jnp.sum(grads, axis=1) # Reduce zero matrixes from jcov
+    
+    def train(self, inputs, target_values, nCycles=100, batch_size=2):
 
-        # batch_process_fn = jax.vmap(process_gene, in_axes=(0,))
-        # return batch_process_fn(jnp.array(gene_list))
-        results = []
-        for gene in gene_list:
-            # print(gene)
-            model = NEATModel(gene)  # Create NEAT model instance for each genome
-            updated_genome, avg_error, predictions = model.backward(inputs, targets, nCycles)
-            results.append({
-                "updated_genome": updated_genome,
-                "avg_error": avg_error,
-                "output": predictions
-            })
+        for cycle in range(nCycles):
+            # Randomly select items
+            indices = random.choice(key, inputs.shape[0], shape=(batch_size,), replace=False)
+            self.inputs = inputs[indices]
+            self.target_values = target_values[indices]
 
-        return results  # Return as a list instead of JAX array
+            grads = self.backward()
 
+            # Compute current loss and print
+            if cycle % 10 == 0 or cycle == nCycles - 1:
+                loss_value = self.mse_loss(self.stacked_networks['weight_matrix'])
+                print(f"Cycle {cycle}, Loss: {loss_value}")
+
+            for i in range(self.num_genomes):
+                updates, self.opt_states[i] = self.optimizers[i].update(grads[i], self.opt_states[i])
+                self.stacked_networks["weight_matrix"] = self.stacked_networks["weight_matrix"].at[i].set(optax.apply_updates(self.stacked_networks["weight_matrix"][i], updates))
+
+        # Get final fitness
+        fitness = self.mse_loss(self.stacked_networks["weight_matrix"]).tolist()
+
+        # Update weight
+        new_genome_list = []
+        for i, genome_json in enumerate(self.genome_list):
+            # Get weight matrix for genome
+            weight_matrix = self.stacked_networks["weight_matrix"][i]
+            # Get connections
+            conns = genome_json['connections']
+
+            # Update weight
+            for gen in genome_json['genome']:
+                conn = conns[gen["0"]]
+                if gen["2"] == 1:
+                    gen["1"] = float(weight_matrix[conn[0], conn[1]]) # Assign new weight
+
+            new_genome_list.append(genome_json)
+
+        res = {"genome_list":new_genome_list, "fitness": fitness}
+            
+        return res
 
 if __name__ == "__main__":
     # Example Usage:
+    genome_list = []
+
+    # 1-based edges
+    edges = [
+        [0, 4],
+        [1, 4],
+        [1, 5],
+        [2, 4],
+        [2, 3],
+        [4, 3],
+        [4, 5],
+        [5, 3]
+    ]
+
     genome_json = {
-        "nodes": [3, 4, 5, 4],  # Node activations (sigmoid, tanh, relu, tanh)
-        "connections": [[0, 1], [1, 2], [2, 3]],  # List of edges (from-to)
+        "nodes": [0, 0, 0, 3, 5, 5],  # Node activations (sigmoid, relu, relu)
+        "connections": edges,  # List of edges (from-to)
         "nInput": 2,
         "nOutput": 1,
         "genome": [
             {"0": 0, "1": 0.5, "2": 1},  # (index, weight, active)
             {"0": 1, "1": -0.8, "2": 1},
-            {"0": 2, "1": 1.2, "2": 1},
+            {"0": 2, "1": 0.2, "2": 1},
+            {"0": 3, "1": -0.2, "2": 1},
+            {"0": 4, "1": 0.6, "2": 1},
+            {"0": 5, "1": -0.1, "2": 1},
+            {"0": 6, "1": 0.1, "2": 1},
+            {"0": 7, "1": 0.5, "2": 1},
         ],
     }
+    genome_list.append(genome_json)
 
-    # Example batch data
-    inputs = jnp.array([[0.2, 0.5], [0.1, 0.4], [0.7, 0.3]])  # Shape: (batch_size, nInput)
-    targets = jnp.array([[1.0], [0.0], [1.0]])  # True labels (binary)
+    # 1-based edges
+    edges = [
+        [0, 4],
+        [1, 5],
+        [2, 4],
+        [4, 5],
+        [4, 6],
+        [5, 3],
+        [6, 3]
+    ]
+
+    genome_json = {
+        "nodes": [0, 0, 0, 3, 5, 5, 5],  # Node activations (sigmoid, relu, relu, relu)
+        "connections": edges,  # List of edges (from-to)
+        "nInput": 2,
+        "nOutput": 1,
+        "genome": [
+            {"0": 0, "1": 0.5, "2": 1},  # (index, weight, active)
+            {"0": 1, "1": -0.8, "2": 1},
+            {"0": 2, "1": 0.2, "2": 1},
+            {"0": 3, "1": -0.2, "2": 1},
+            {"0": 4, "1": 0.6, "2": 1},
+            {"0": 5, "1": -0.1, "2": 1},
+            {"0": 6, "1": 0.1, "2": 1},
+        ],
+    }
+    genome_list.append(genome_json)
+
+    inputs = jnp.array([[0.5,0.2,-0.8], [0.1,0.1,-0.2]], dtype=jnp.float32)
+    target_values = jnp.array([1, 0], dtype=jnp.float32)
+
 
     # Initialize NEAT model
-    neat = NEATModel(genome_json, learning_rate=0.01)
+    neat = NEATModel(genome_list, lr=0.1)
 
     # Run forward and backward pass
-    updated_genome, avg_error = neat.backward(inputs, targets)
+    out = neat.train(inputs, target_values, nCycles=50)
 
     # Print results
-    print("Updated Genome JSON:", updated_genome)
-    print("Average Error:", avg_error)
+    print("Output:", out)

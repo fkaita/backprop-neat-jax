@@ -466,93 +466,120 @@ var fitnessFunc = async function(genome, _backpropMode, _nCycles) {
     var genomeBackup = genome.copy(); // make a copy, in case backprop messes shit up.
     var origGenomeBackup = genome.copy(); // make a copy, in case backprop REALLY messes shit up.
 
-    try {
-      console.log("Initializing model...");
-      await Api.initializeModel(genome.toJSON(), learnRate);
-      console.log("Model initialized.");
-    } catch (error) {
-        console.error('Error during weight optimization:', error);
-    }
+    // for (j=0;j<1;j++) {
+    //   // try to find error
+    //   avgError = 0.0;
+    //   // make minibatch
+    //   makeMiniBatch();
+    //   genome.setupModel(nBatch);
+    //   genome.setInput(dataBatch);
+    //   G = new R.Graph();
 
-    console.log("Entering backprop loop.");
-    for (j=0;j<1;j++) {
+    //   // Replace this part with JAX backend FROM HERE
+    //   // genome.forward(G);
+    //   output = genome.getOutput();
+    //   // console.log(output)
+    //   // output[0] = G.sigmoid(output[0]);
+
+    //   // for (i=0;i<nBatch;i++) {
+    //   //   y = output[0].w[i]; // prediction (not to be confused w/ coordinate)
+    //   //   t = labelBatch.get(i, 0); // ground truth label
+    //   //   e = -(t*Math.log(y)+(1-t)*Math.log(1-y)); // logistic regression
+    //   //   output[0].dw[i] = (y-t) / nBatch;
+    //   //   avgError += e/nBatch;
+    //   // }
+
+    //   // G.backward();
+    //   // solver.step(genome.model.connections, learnRate, 0.001, 5.0);
+    //   // genome.updateModelWeights();
+    //   // REPLACE UNTIL HERE
+
+    //   // Replace above with JAX backend API (Forward and backward)
+    //   try {
+    //     console.log("Preparing to call backwardPass...");
+    //     const response = await Api.backwardPass(dataBatch, labelBatch, _nCycles);
+    //     console.log("Backward pass completed.");
+          
+    //       // Ensure updatedGraph is valid
+    //       if (!response) {
+    //           throw new Error("Received invalid response from backend.");
+    //       }
+
+    //       // Update genome with new data
+    //       // genome.fromJSON(response.updatedGenome);
+    //       // const weights = response.updatedGenome.genome.map(item => item["1"]);
+    //       genome.importWeightsNew(response.updatedGenome.genome);
+    //       genome.fitness = response.avgError;
+
+    //       avgError = response.avgError;
+    //       output[0] = response.output;
+    //   } catch (error) {
+    //       console.error('Error during weight optimization:', error);
+    //   }
+    //   console.log("Backward pass completed."); 
+    //   finalError = findTotalError();
+    //   console.log(avgError, finalError)
+    //   if (finalError > initError) {
+    //     // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
+    //     // console.log('leaving prematurely at j = '+j);
+    //     genome.copyFrom(genomeBackup);
+    //     break;
+    //   } else {
+    //     initError = finalError;
+    //     genomeBackup = genome.copy();
+    //   }
+
+    //     // if (j > 0 && j % 20 === 0) {
+    //     //   finalError = findTotalError();
+    //     //   console.log(avgError, finalError)
+    //     //   if (finalError > initError) {
+    //     //     // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
+    //     //     // console.log('leaving prematurely at j = '+j);
+    //     //     genome.copyFrom(genomeBackup);
+    //     //     break;
+    //     //   } else {
+    //     //     initError = finalError;
+    //     //     genomeBackup = genome.copy();
+    //     //   }
+    //     // }
+
+    // }
+    for (j=0;j<nCycles;j++) {
       // try to find error
       avgError = 0.0;
       // make minibatch
       makeMiniBatch();
-      console.log("Mini batch created.");
       genome.setupModel(nBatch);
       genome.setInput(dataBatch);
       G = new R.Graph();
-
-      // Replace this part with JAX backend FROM HERE
-      // genome.forward(G);
+      genome.forward(G);
       output = genome.getOutput();
-      // console.log(output)
-      // output[0] = G.sigmoid(output[0]);
+      output[0] = G.sigmoid(output[0]);
 
-      // for (i=0;i<nBatch;i++) {
-      //   y = output[0].w[i]; // prediction (not to be confused w/ coordinate)
-      //   t = labelBatch.get(i, 0); // ground truth label
-      //   e = -(t*Math.log(y)+(1-t)*Math.log(1-y)); // logistic regression
-      //   output[0].dw[i] = (y-t) / nBatch;
-      //   avgError += e/nBatch;
-      // }
-
-      // G.backward();
-      // solver.step(genome.model.connections, learnRate, 0.001, 5.0);
-      // genome.updateModelWeights();
-      // REPLACE UNTIL HERE
-
-      // Replace above with JAX backend API (Forward and backward)
-      try {
-        console.log("Preparing to call backwardPass...");
-        const response = await Api.backwardPass(dataBatch, labelBatch, _nCycles);
-        console.log("Backward pass completed.");
-          
-          // Ensure updatedGraph is valid
-          if (!response) {
-              throw new Error("Received invalid response from backend.");
-          }
-
-          // Update genome with new data
-          // genome.fromJSON(response.updatedGenome);
-          // const weights = response.updatedGenome.genome.map(item => item["1"]);
-          genome.importWeightsNew(response.updatedGenome.genome);
-          genome.fitness = response.avgError;
-
-          avgError = response.avgError;
-          output[0] = response.output;
-      } catch (error) {
-          console.error('Error during weight optimization:', error);
-      }
-      console.log("Backward pass completed."); 
-      finalError = findTotalError();
-      console.log(avgError, finalError)
-      if (finalError > initError) {
-        // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
-        // console.log('leaving prematurely at j = '+j);
-        genome.copyFrom(genomeBackup);
-        break;
-      } else {
-        initError = finalError;
-        genomeBackup = genome.copy();
+      for (i=0;i<nBatch;i++) {
+        y = output[0].w[i]; // prediction (not to be confused w/ coordinate)
+        t = labelBatch.get(i, 0); // ground truth label
+        e = -(t*Math.log(y)+(1-t)*Math.log(1-y)); // logistic regression
+        output[0].dw[i] = (y-t) / nBatch;
+        avgError += e/nBatch;
       }
 
-        // if (j > 0 && j % 20 === 0) {
-        //   finalError = findTotalError();
-        //   console.log(avgError, finalError)
-        //   if (finalError > initError) {
-        //     // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
-        //     // console.log('leaving prematurely at j = '+j);
-        //     genome.copyFrom(genomeBackup);
-        //     break;
-        //   } else {
-        //     initError = finalError;
-        //     genomeBackup = genome.copy();
-        //   }
-        // }
+      G.backward();
+      solver.step(genome.model.connections, learnRate, 0.001, 5.0);
+      genome.updateModelWeights();
 
+      if (j > 0 && j % 20 === 0) {
+        finalError = findTotalError();
+        if (finalError > initError) {
+          // if the final sumSqError is crappier than initSumSqError, just make genome return to initial guy.
+          // console.log('leaving prematurely at j = '+j);
+          genome.copyFrom(genomeBackup);
+          break;
+        } else {
+          initError = finalError;
+          genomeBackup = genome.copy();
+        }
+      }
     }
 
     avgError = findTotalError();
@@ -808,7 +835,7 @@ async function backprop(n,_clusterMode) {
     }
     return await fitnessFunc(g, false, 1);
   };
-  await trainer.applyFitnessFunc(f, data, label, clusterMode, n);
+  await trainer.applyFitnessFunc(f, data, label, n, clusterMode);
 
   console.log("backprop finished. Hiding spinner now...");
 
@@ -919,49 +946,76 @@ $("#sgd_button").click(function() {
 
 // });
 
-$("#evolve_button").click(async function() {
-  console.log("Button clicked!");
-  // Ensure controlPanel is visible before calling fadeOut
-  if ($("#controlPanel").is(":visible")) {
-    await new Promise(resolve => {
-      $("#controlPanel").fadeOut(500, "swing", function() {
-        console.log("Control panel faded out!");
-        resolve();
+// $("#evolve_button").click(async function() {
+//   console.log("Button clicked!");
+//   // Ensure controlPanel is visible before calling fadeOut
+//   if ($("#controlPanel").is(":visible")) {
+//     await new Promise(resolve => {
+//       $("#controlPanel").fadeOut(500, "swing", function() {
+//         console.log("Control panel faded out!");
+//         resolve();
+//       });
+//     });
+//   } else {
+//     console.log("Control panel was already hidden, skipping fadeOut.");
+//   }
+
+//   $("#loadingSpinner").show();
+//   console.log("Spinner should be visible now.");
+
+//   await new Promise(resolve => {
+//     $("#loadingSpinner").fadeIn(500, "swing", resolve);
+//   });
+
+//   console.log("Spinner animation done!");
+
+//   try {
+//     console.log("Trainer evolving...");
+//     await trainer.evolve();
+
+//     console.log("Calling backprop...");
+//     await backprop(nBackprop);
+//     console.log("Backprop finished.");
+//   } catch (error) {
+//     console.error("Error in training or backprop:", error);
+//   } finally {
+//     console.log("Fading out spinner...");
+//     await new Promise(resolve => {
+//       $("#loadingSpinner").fadeOut(500, "swing", resolve);
+//     });
+
+//     console.log("Spinner hidden, showing control panel.");
+//     $("#controlPanel").fadeIn(500, "swing");
+//   }
+// });
+$("#evolve_button").click(function() {
+
+  $("#controlPanel").fadeOut(500, "swing", function() {
+    $("#loadingSpinner").fadeIn(500, "swing", function() {
+
+      // beginning of callback hell
+      trainer.evolve();
+
+      // compress network:
+      /*
+      compressor.buildMap(trainer.getAllGenes());
+      compressor.compressNEAT();
+      compressor.compressGenes(trainer.genes);
+      compressor.compressGenes(trainer.hallOfFame);
+      compressor.compressGenes(trainer.bestOfSubPopulation);
+      */
+
+      // finished compression
+      backprop(nBackprop);
+      // end of callback hell
+
+      $("#loadingSpinner").fadeOut(500, "swing", function() {
+        $("#controlPanel").fadeIn(500, "swing");
       });
     });
-  } else {
-    console.log("Control panel was already hidden, skipping fadeOut.");
-  }
-
-  $("#loadingSpinner").show();
-  console.log("Spinner should be visible now.");
-
-  await new Promise(resolve => {
-    $("#loadingSpinner").fadeIn(500, "swing", resolve);
   });
 
-  console.log("Spinner animation done!");
-
-  try {
-    console.log("Trainer evolving...");
-    await trainer.evolve();
-
-    console.log("Calling backprop...");
-    await backprop(nBackprop);
-    console.log("Backprop finished.");
-  } catch (error) {
-    console.error("Error in training or backprop:", error);
-  } finally {
-    console.log("Fading out spinner...");
-    await new Promise(resolve => {
-      $("#loadingSpinner").fadeOut(500, "swing", resolve);
-    });
-
-    console.log("Spinner hidden, showing control panel.");
-    $("#controlPanel").fadeIn(500, "swing");
-  }
 });
-
 
 $("#cluster0").click(function() {
   setCluster(0);
