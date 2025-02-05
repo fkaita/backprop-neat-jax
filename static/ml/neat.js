@@ -631,7 +631,7 @@ var N = {};
       // run this function _after_ setupModel() is called!
       var i, j;
       var n = input.n;
-      var d = input.d; // Devide input by 5
+      var d = input.d;
       var inputNodeList = getNodeList(NODE_INPUT);
       var biasNodeList = getNodeList(NODE_BIAS);
       var dBias = biasNodeList.length;
@@ -1163,7 +1163,7 @@ var N = {};
       }  
       console.log("n cycle is.. ", nCycles)
 
-      if (nCycles==1){
+      if (nCycles<10){
         console.log("started to apply old funcs")
         this.applyFitnessFuncToList(f, this.genes);
         this.applyFitnessFuncToList(f, this.hallOfFame);

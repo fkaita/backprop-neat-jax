@@ -621,9 +621,11 @@ function buildPredictionList(pList, thedata, thelabel, g, quantisation_) {
   g.forward(G);
   output = g.getOutput();
   output[0] = G.sigmoid(output[0]);
+  // output = Api.forwardPass(thedata);
 
   for (i=0;i<n;i++) {
     y = output[0].w[i]; // prediction (not to be confused w/ coordinate)
+    // y = output[i]
     if (quantisation === false) {
       pList[i] = (y > 0.5)? 1.0: 0.0;
       acc += Math.round(y) === thelabel.get(i, 0)? 1 : 0;

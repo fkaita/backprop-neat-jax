@@ -64,10 +64,17 @@ def forward():
         return jsonify({"error": "Model not initialized"}), 400
 
     data = request.json
-    inputs = jnp.array(data.get("inputs"))
+    # print("Received JSON:", data)
+    inputs_w = list(data["inputs"]["w"].values())
+    inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"]))
+    print('info')
+    print(inputs)
+    print(inputs.shape)
 
     try:
-        outputs = neat_model.forward(inputs)
+        outputs = neat_model.forward_multiple_genome(inputs)
+        print('out')
+        print(outputs)
         return jsonify({"outputs": outputs.tolist()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -108,8 +115,10 @@ def backward():
 @app.route('/batch_backward', methods=['POST'])
 def batch_backward():
     """Perform backward pass on multiple genomes in parallel and return updated genomes."""
+    global neat_model
     try:
         data = request.json
+
         # print(data)
         gene_list = data["genes"]  # List of genome JSON objects
         nCycles = data.get("nCycles", 1)  # Training cycles (default = 1)
@@ -119,8 +128,6 @@ def batch_backward():
         
         # Clear old memory
         jax.clear_caches()
-        
-        print("got data")
         
         # Initialize the NEAT model using the first genome in the list
         json_gene_list = []
@@ -138,7 +145,7 @@ def batch_backward():
         targets_w = np.array(list(data["targets"]["w"].values()), dtype=np.float16)
 
         # Reshape and add bias
-        inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"])) #S/ 5
+        inputs = jnp.array(inputs_w).reshape((data["inputs"]["n"], data["inputs"]["d"])) #/ 5
         bias = jnp.ones((data["inputs"]["n"], 1))
         inputs_with_bias = jnp.concatenate([inputs, bias], axis=1)
         targets = jnp.array(targets_w)
@@ -149,12 +156,12 @@ def batch_backward():
         print(f"second gene is {json_gene_list[1]}")
         print("input values are", inputs)
 
-        # Use JAX for memory efficiency
-        # @jax.jit
-        # def batched_train(neat_model, inputs, targets, nCycles):
-        #     return neat_modßel.train(inputs, targets, nCycles)
+        # results = []
+        # for json_gene in json_gene_list:
+        #     neat_model = NEATModel(json_gene, lr=learnRate)
+        #     result = neat_model.train(inputs_with_bias, targets, nCycles)
+        #     results.append(result)
 
-        # Call batch_backward function from NEATModel
         print("started model")
         results = neat_model.train(inputs_with_bias, targets, nCycles)
         # results = batched_train(neat_model, inputs, targets, nCycles)
